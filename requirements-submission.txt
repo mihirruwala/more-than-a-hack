@@ -1,0 +1,4 @@
+# Exact versions make_submission.py was run with (Python 3.13.5).
+# The repo's own requirements.txt is left unpinned for the scorer.
+numpy==2.2.6
+pandas==2.3.1

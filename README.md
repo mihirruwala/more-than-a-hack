@@ -1,3 +1,34 @@
+# Team MSN: More than a Hack 2027, Phase 1
+
+Our entry for the ball possession challenge. Everything below the line is the organisers'
+original README, kept as it was.
+
+## Reproduce our submission
+
+You need Python 3 and the match data bundle. The data is not in this repo and can't be.
+
+```bash
+pip install -r requirements-submission.txt
+# put BAR-ATH_tactical_atd.xml and BAR-ATH_tactical_atd.txt in data/tactical/
+python3 make_submission.py
+```
+
+That writes `evaluation/results/Team_MSN.csv`, runs the official validator on it and prints its
+SHA-256. Two runs give the same file. It takes a few minutes, most of it reading the tracking.
+
+What it does, in short: a Kalman filter keeps track of the ball while the tracking can't see it,
+a three-state model (H, A, D) decides who has the ball using a whole half of hindsight, and a
+cleanup pass merges spells that are too short to be real possessions. Only the ATD tracking is
+used. The settings come from simulated matches (`starter/synthetic_match.py`), not from the
+public five minutes. `make_submission.py` lists them, and `DEVELOPMENT.md` covers the rest of
+the repo, including the Barca Lab web console in `web/`.
+
+```bash
+python3 -m unittest discover -s tests    # no match data needed
+```
+
+---
+
 # More than a Hack 2027 — Phase 1: Ball Possession
 
 **Organised by [Metrica Sports](https://metrica-sports.com), [FC Barcelona](https://www.fcbarcelona.com)
