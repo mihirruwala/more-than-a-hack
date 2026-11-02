@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.local
+.env
+.env.*
+!.env.example
+# Never let match assets into the web app, even by accident.
+*.mp4
+*_atd.*
+*homography*
+*smart_tagging*
+*.tsbuildinfo

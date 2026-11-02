@@ -1,0 +1,236 @@
+/* -- possession strip ---------------------------------------------------------------------- */
+.strip {
+  width: 100%;
+}
+
+.stripTrack {
+  position: relative;
+  height: 34px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--state-unknown);
+}
+
+.stripTall {
+  height: 56px;
+}
+
+.stripTrack > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+/* Hairline between segments so adjacent spells of the same colour family still read apart. */
+.segH, .segA, .segD, .segX {
+  box-shadow: inset -1px 0 0 rgb(7 19 41 / 0.55);
+}
+
+.segH { background: var(--state-home); }
+.segA { background: var(--state-away); }
+.segD {
+  background: repeating-linear-gradient(135deg, var(--state-dead) 0 3px, color-mix(in oklab, var(--state-dead) 70%, var(--navy-900)) 3px 6px);
+}
+.segX { background: var(--state-unknown); }
+
+.stripAxis {
+  position: relative;
+  height: 20px;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-quiet);
+}
+
+.stripAxis span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+.stripAxis span:first-child {
+  transform: none;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.legend .mono {
+  color: var(--text);
+}
+
+.keyH, .keyA, .keyD, .keyX {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.keyH { background: var(--state-home); }
+.keyA { background: var(--state-away); }
+.keyD { background: var(--state-dead); }
+.keyX { background: var(--state-unknown); outline: 1px solid var(--line-strong); }
+
+/* -- baseline sweep ------------------------------------------------------------------------ */
+.sweep {
+  --label-w: 84px;
+  --value-w: 64px;
+}
+
+.sweepKey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-bottom: var(--space-4);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.sweepKey span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sweepKey i {
+  position: static;
+  transform: none;
+}
+
+.sweepTable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.sweepTable col,
+.sweepLabel {
+  width: var(--label-w);
+}
+
+.sweepTable tr {
+  border-top: 1px solid var(--line);
+}
+
+.sweepTable tr:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.sweepLabel {
+  padding: var(--space-3) 0;
+  text-align: left;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.floorTag {
+  margin-left: var(--space-2);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgb(214 179 90 / 0.14);
+  color: var(--gold-400);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sweepFloor {
+  background: linear-gradient(90deg, rgb(214 179 90 / 0.06), transparent 70%);
+}
+
+.sweepTrackCell {
+  padding: 0 var(--space-4);
+}
+
+.sweepTrack {
+  position: relative;
+  height: 22px;
+  background:
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 25% 100%;
+}
+
+.sweepBar {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, var(--gold-400), var(--slate-400));
+  opacity: 0.5;
+}
+
+.dotMacro,
+.dotSpell {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-block;
+}
+
+.dotMacro {
+  background: var(--navy-900);
+  border: 2px solid var(--slate-400);
+}
+
+.dotSpell {
+  background: var(--gold-400);
+  box-shadow: 0 0 0 3px rgb(214 179 90 / 0.18);
+}
+
+.sweepValue {
+  width: var(--value-w);
+  text-align: right;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.sweepSpell {
+  color: var(--gold-300);
+  font-weight: 600;
+}
+
+.sweepAxis {
+  position: relative;
+  height: 18px;
+  margin: 6px calc(var(--value-w) * 2) 0 calc(var(--label-w) + var(--space-4));
+  margin-right: calc(var(--value-w) * 2 + var(--space-4));
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-quiet);
+}
+
+.sweepAxis span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 520px) {
+  .sweep {
+    --label-w: 64px;
+    --value-w: 54px;
+  }
+
+  .sweepTrackCell {
+    padding: 0 var(--space-2);
+  }
+
+  .sweepAxis {
+    margin-left: calc(var(--label-w) + var(--space-2));
+    margin-right: calc(var(--value-w) * 2 + var(--space-2));
+  }
+}

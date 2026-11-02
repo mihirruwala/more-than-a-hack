@@ -1,0 +1,208 @@
+/* Shared primitives. Small on purpose: anything page-specific lives with its page. */
+
+/* -- section label ------------------------------------------------------------------------- */
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-weight: 500;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--label-color, var(--text-quiet));
+}
+
+.labelRule::before {
+  content: "";
+  width: 18px;
+  height: 1px;
+  background: var(--accent);
+}
+
+/* -- panel --------------------------------------------------------------------------------- */
+.panel {
+  position: relative;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-1);
+  min-width: 0;
+}
+
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5) 0;
+  flex-wrap: wrap;
+}
+
+.panelTitle {
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.panelBody {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+
+/* -- provenance badge ---------------------------------------------------------------------- */
+.badge {
+  --c: var(--prov-manual);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 6px;
+  border: 1px solid color-mix(in oklab, var(--c) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--c) 10%, transparent);
+  color: var(--c);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c);
+}
+
+.prov-verified { --c: var(--prov-verified); }
+.prov-published { --c: var(--prov-published); }
+.prov-manual { --c: var(--prov-manual); }
+.prov-synthetic { --c: var(--prov-synthetic); }
+.prov-demo { --c: var(--prov-demo); }
+
+/* -- status pill --------------------------------------------------------------------------- */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+}
+
+.st-done { color: var(--green-400); }
+.st-done .statusDot { background: currentColor; }
+.st-active { color: var(--gold-400); }
+.st-active .statusDot { background: color-mix(in oklab, currentColor 40%, transparent); }
+.st-blocked { color: var(--red-400); }
+.st-todo { color: var(--slate-400); }
+
+/* -- stat ---------------------------------------------------------------------------------- */
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  min-width: 0;
+}
+
+.statValue {
+  font-family: var(--font-display);
+  font-size: var(--fs-stat);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.statUnit {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  color: var(--text-quiet);
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+
+.statNote {
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.statFoot {
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
+/* -- empty state --------------------------------------------------------------------------- */
+.empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-5);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-m);
+  color: var(--text-muted);
+}
+
+.emptyTitle {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* -- buttons ------------------------------------------------------------------------------- */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.button:hover {
+  border-color: var(--text-quiet);
+  background: rgb(255 255 255 / 0.04);
+}
+
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.primary:hover {
+  background: var(--gold-300);
+  border-color: var(--gold-300);
+}
+
+.onCream {
+  border-color: rgb(7 19 41 / 0.3);
+  color: var(--navy-900);
+}
+
+.onCream:hover {
+  border-color: var(--navy-900);
+  background: rgb(7 19 41 / 0.05);
+}
