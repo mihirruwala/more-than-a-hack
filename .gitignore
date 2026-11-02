@@ -62,3 +62,6 @@ __pycache__/
 venv/
 env/
 .DS_Store
+
+# Replays of the real match hold tracking-derived positions: local only, never committed.
+evaluation/replays/
