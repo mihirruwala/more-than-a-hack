@@ -158,7 +158,7 @@ function ModelForm({ initial, isNew, onSubmit, cancelTo }: { initial: ModelDraft
             <Field label="Source file" hint="Path in the repository, if it exists">
               {(p) => <Input {...p} mono value={draft.source} onChange={(e) => set("source", e.target.value)} placeholder="starter/postprocess.py" />}
             </Field>
-            <Field label="Runtime" hint="Only if actually measured, e.g. 38 s on M2">
+            <Field label="Runtime" hint="Only if measured, e.g. 38 s on M2">
               {(p) => <Input {...p} mono value={draft.runtime} onChange={(e) => set("runtime", e.target.value)} />}
             </Field>
           </div>

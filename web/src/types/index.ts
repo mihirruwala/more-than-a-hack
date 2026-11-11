@@ -159,7 +159,7 @@ export interface LogEntry {
   kind: LogKind;
   title: string;
   body: string;
-  /** Every entry is manual until automatic tracking actually exists. */
+  /** Every entry is manual until automatic tracking exists. */
   origin: "manual";
 }
 

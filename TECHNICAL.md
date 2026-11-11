@@ -108,7 +108,9 @@ The provided game's labels can't be used for training, and the open labelled dat
 | Broadcast ATD | no | on a different timeline from the submission (164,488 vs 199,319 frames) |
 | Metrica Sports sample data, games 1 and 2 ([github.com/metrica-sports/sample-data](https://github.com/metrica-sports/sample-data)) | validation only | two anonymised real matches with tracking and events. We used them to choose settings; `make_submission.py` never reads them. See "Validation on other matches" |
 
-**Smart Tagging.** `starter/tag_prior.py` (behind `--tags`, off in the submission) turns tags
+### Smart Tagging
+
+`starter/tag_prior.py` (behind `--tags`, off in the submission) turns tags
 into small per-frame nudges: attacking phases toward the tagged team, defending phases toward
 the other team, a goal toward a dead-ball restart. On simulated matches with noisy fake tags,
 a gentle nudge gained about 0.02 spellF1 when the tags were mostly right and lost about the

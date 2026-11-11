@@ -1,5 +1,9 @@
 # Barça Lab (web)
 
+This is our local research console. Its public pages (`/`, `/match`, `/methodology`) were written
+before the final pipeline and describe the possession model as proposed. The up-to-date public
+site, with the final method and measured results, is https://mix-bloom-97447024.figma.site.
+
 ```bash
 npm install          # once
 npm run dev          # http://localhost:5173, with hot reload

@@ -1,6 +1,6 @@
 // Seed records for the research store: what the registry holds on first run, and after a reset.
 //
-// Every record describes work that actually happened in this repository, or work that is
+// Every record describes work that happened in this repository, or work that is
 // explicitly planned. Numbers are the real outputs of tests/test_postprocess.py on synthetic data
 // (labelled synthetic) or quotes from EVALUATION.md (labelled published). Nothing is verified,
 // because no run of the official scorer on the match has been recorded yet.

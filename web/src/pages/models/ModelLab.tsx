@@ -52,7 +52,7 @@ export function ModelLab() {
             Model <em>Lab</em>
           </>
         }
-        lede="The baseline and every candidate approach: what each does, how it's configured, and what has actually been measured. A candidate listed here hasn't beaten anything until a verified run says so."
+        lede="The baseline and every candidate approach: what each does, how it's configured, and what has been measured. A candidate listed here hasn't beaten anything until a verified run says so."
         actions={
           <LinkButton to="/lab/models/new" variant="primary" icon={<Plus size={16} aria-hidden="true" />}>
             New model version

@@ -48,7 +48,7 @@ const PRINCIPLES: { title: string; claim: Claim; body: string; source: string }[
   {
     title: "A dead ball is its own problem",
     claim: "hypothesis",
-    body: "A stoppage is a referee's decision, not a property of one frame. Restarts, throw-ins with no team tag, and a ball the tracker simply lost all look alike to a per-frame rule. We expect explicit stoppage evidence, from restart geometry and Smart Tagging set pieces, to matter more than a better nearest-player rule.",
+    body: "A stoppage is a referee's decision, not a property of one frame. Restarts, throw-ins with no team tag, and a ball the tracker lost all look alike to a per-frame rule. We expect explicit stoppage evidence, from restart geometry and Smart Tagging set pieces, to matter more than a better nearest-player rule.",
     source: "Not yet tested",
   },
   {

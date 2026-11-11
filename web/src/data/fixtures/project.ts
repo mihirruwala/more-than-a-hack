@@ -1,5 +1,5 @@
 // Static project facts. Everything here is either quoted from the repository's documentation or a
-// record of work that actually happened in this repo, each with its provenance. Editable records
+// record of work that happened in this repo, each with its provenance. Editable records
 // (models, experiments, log) live in the research store and are seeded from seed.ts.
 
 import type { Milestone, ProjectInfo, MetricRecord } from "../../types";

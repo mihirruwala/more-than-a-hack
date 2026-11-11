@@ -3,7 +3,7 @@
 Our entry for the ball possession challenge, by Mihir Ruwala, Sneha Jakhotiya, Umika Sood and
 Shashwat Goel. Everything below the line is the organisers' original README, unchanged.
 
-Project site: **https://mix-bloom-97447024.figma.site** (an overview of the approach, a demo
+Project site: https://mix-bloom-97447024.figma.site (an overview of the approach, a demo
 match on fictional teams, and our measured results).
 
 ## Reproduce our submission

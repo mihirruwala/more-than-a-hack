@@ -36,8 +36,9 @@ Run it:
         --replay-from 448 --replay-seconds 90               # + a window for the live view
 
 The real-match mode needs the tactical ATD files and writes evaluation/results/live_lag<L>.csv;
-it does not read the ground truth. Every threshold below is a football prior, chosen on the
-simulator, and none has been checked against the real match yet.
+it does not read the ground truth. Every threshold below is a football prior. They were chosen on
+the simulator, and the dead-ball ones were also checked on two open Metrica matches
+(tools/external_check.py, tools/dead_ball_study.py).
 
 numpy only, like baseline.py.
 """
