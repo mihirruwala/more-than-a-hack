@@ -3,7 +3,7 @@ import s from "./layout.module.css";
 
 export function Brand({ to = "/", sub }: { to?: string; sub?: string }) {
   return (
-    <Link to={to} className={s.brand} aria-label="Barça Lab — home">
+    <Link to={to} className={s.brand} aria-label="Barça Lab home">
       <svg className={s.brandMark} viewBox="0 0 32 32" aria-hidden="true">
         <circle cx="16" cy="16" r="13" fill="none" stroke="var(--gold-400)" strokeWidth="1.4" />
         <path d="M16 3v26" stroke="var(--cream-100)" strokeWidth="1" opacity=".5" />

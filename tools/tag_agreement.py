@@ -69,10 +69,10 @@ def verdict(stats):
         return None, "no tagged frame is graded and live; nothing to judge"
     share = stats["right"] / float(alive)
     if share >= 0.80:
-        return share, "good -- run with --tags and compare"
+        return share, "good: run with --tags and compare"
     if share >= 0.65:
-        return share, "mixed -- --tags is unlikely to help much; worth one run at most"
-    return share, "poor -- leave --tags off"
+        return share, "mixed: --tags is unlikely to help much; worth one run at most"
+    return share, "poor: leave --tags off"
 
 
 def main():

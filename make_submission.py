@@ -7,8 +7,8 @@ Needs data/tactical/BAR-ATH_tactical_atd.xml and .txt (see DATA.md). Writes
 evaluation/results/Team_MSN.csv, checks it with the official validator and prints its SHA-256,
 so two runs can be compared byte for byte.
 
-The pipeline, with every setting spelled out here rather than taken from module defaults, so a
-later change to a default cannot quietly change the submission:
+The pipeline. The settings below are written out here instead of taken from module defaults, so
+changing one of those defaults later can't change the submission without anyone noticing:
 
   1. starter/live_estimator.py, offline: Kalman ball filter + sticky H/A/D HMM, smoothed over
      each whole half, per-frame evidence raised to POWER. The evidence itself (control radius,

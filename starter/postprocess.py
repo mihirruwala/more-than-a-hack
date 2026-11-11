@@ -4,14 +4,14 @@ The board ranks on spellF1, which scores each possession as one object. Two kind
 it the most, and neither shows up much in macroF1:
 
   1. A possession split by a gap. The ball is lost behind a crowd for two seconds, the signal
-     says D, and one true possession becomes two predicted ones -- a miss plus two spurious
+     says D, and one true possession becomes two predicted ones: a miss plus two spurious
      spells, each of which may also fail the IoU test against the truth.
   2. A micro-spell. A deflection or a loose ball near an opponent flips the label for a handful
      of frames, inventing a possession that never happened and cutting its neighbour in half.
 
 clean_segments() repairs both, inside each half separately, and nothing else. Clusters of
-micro-spells are treated as one stretch, so flicker cannot fuse into a fake possession. It sees labels
-only -- no tracking, no ground truth -- so it can sit after any per-frame model.
+micro-spells are treated as one stretch, so flicker cannot fuse into a fake possession. It sees only
+labels, with no tracking and no ground truth, so it can sit after any per-frame model.
 
     from postprocess import clean_segments
     labels = clean_segments(labels)              # an array of "H" / "A" / "D" / "X"
@@ -20,8 +20,8 @@ numpy only, like baseline.py.
 
 The defaults are football priors, not fitted values: a real possession lasts longer than a
 second, and a ball out of play for under three seconds is almost always an occlusion rather than
-a stoppage. They are deliberately not tuned against the public five minutes -- see RULES.md and
-EVALUATION.md for why that would pick the wrong values anyway.
+a stoppage. They are deliberately not tuned against the public five minutes. RULES.md and
+EVALUATION.md explain why that would pick the wrong values anyway.
 """
 
 import heapq
@@ -51,7 +51,7 @@ def clean_segments(labels, blocks=None, min_spell=MIN_SPELL, max_gap=MAX_GAP):
 
     `blocks` is [(half, first_frame, last_frame)] with both ends inclusive, the format of
     games.half_video_blocks, which is the default. Frames outside every block are returned
-    untouched, and nothing is ever merged across a block boundary -- the halftime hole must not
+    untouched, and nothing is ever merged across a block boundary. The halftime hole must not
     join the last possession of one half to the first of the next.
 
     The two repairs feed each other (absorbing a blip can leave a short gap between two spells of
@@ -130,7 +130,7 @@ def absorb_noisy_stretches(runs, min_spell):
 
     Flicker clusters: 'H ... A9 H2 A12 H2 A13 ... H' is one H possession with a contested ball in
     the middle. Handled one run at a time, shortest first, the 2-frame H pieces go first and the A
-    blips fuse into a 38-frame spell that clears the threshold -- a possession invented from
+    blips fuse into a 38-frame spell that clears the threshold, a possession invented from
     noise. Taken as a stretch, it is enclosed by H on both sides and goes to H whole.
 
     Only when both enclosing runs are the same team; anything else is left to

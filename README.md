@@ -1,7 +1,7 @@
 # Team MSN: More than a Hack 2027, Phase 1
 
-Our entry for the ball possession challenge. Everything below the line is the organisers'
-original README, kept as it was.
+Our entry for the ball possession challenge, by Mihir Ruwala, Sneha Jakhotiya, Umika Sood and
+Shashwat Goel. Everything below the line is the organisers' original README, unchanged.
 
 ## Reproduce our submission
 
@@ -16,11 +16,12 @@ python3 make_submission.py
 That writes `evaluation/results/Team_MSN.csv`, runs the official validator on it and prints its
 SHA-256. Two runs give the same file. It takes a few minutes, most of it reading the tracking.
 
-What it does, in short: a Kalman filter keeps track of the ball while the tracking can't see it,
-a three-state model (H, A, D) decides who has the ball using a whole half of hindsight, and a
-cleanup pass merges spells that are too short to be real possessions. Only the ATD tracking is
-used. The settings come from simulated matches (`starter/synthetic_match.py`), not from the
-public five minutes. `make_submission.py` lists them, and `DEVELOPMENT.md` covers the rest of
+In short: a Kalman filter keeps track of the ball while the tracking can't see it, a
+three-state model (H, A, D) decides who has the ball with a whole half of hindsight, and a
+cleanup pass merges spells too short to be real possessions. The submission reads only the
+ATD tracking. We chose the settings on simulated matches (`starter/synthetic_match.py`) and on
+two open Metrica sample matches (`tools/external_check.py`), never on the public five minutes.
+`TECHNICAL.md` explains the approach and the numbers, and `DEVELOPMENT.md` covers the rest of
 the repo, including the Barca Lab web console in `web/`.
 
 ```bash

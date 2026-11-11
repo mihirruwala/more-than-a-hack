@@ -2,7 +2,7 @@
 
 Smart Tagging is Metrica's automatic annotation of the tactical video: phases of play and set
 pieces, each an interval with a code and a Team tag (see DATA.md and load_smart_tagging.py). It is
-not ground truth -- it has false positives and false negatives, 36 tags have Team "N/A" (every
+not ground truth: it has false positives and false negatives, 36 tags have Team "N/A" (every
 throw-in among them), and its intervals are phases, not possessions. So nothing here copies an
 interval across as a label. Each tag only multiplies the per-frame likelihoods the HMM already
 weighs, by a modest factor, and the tracking evidence can still outvote it.

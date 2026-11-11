@@ -1,6 +1,6 @@
 """Live ball and possession estimation: one frame in, one estimate out.
 
-The baseline decides possession by looking at the whole match at once -- a majority vote over a
+The baseline decides possession by looking at the whole match at once, with a majority vote over a
 window that reaches seconds into the future. This module answers the same question the way a
 live system has to: frames arrive one at a time, and each answer may only use what has arrived.
 
@@ -549,7 +549,7 @@ class ReplayRecorder(object):
     """Collects one window of frames and estimates, then writes it as a replay JSON file.
 
     The file holds, per frame: every track's position, the observed ball, the estimated ball and
-    its uncertainty, the label and the H/A/D probabilities -- and, for synthetic matches only, the
+    its uncertainty, the label and the H/A/D probabilities. For synthetic matches only, it also holds the
     simulator's ground truth. web/src/lib/replay.ts reads exactly this shape.
     """
 
