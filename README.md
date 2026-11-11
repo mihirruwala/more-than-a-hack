@@ -3,6 +3,9 @@
 Our entry for the ball possession challenge, by Mihir Ruwala, Sneha Jakhotiya, Umika Sood and
 Shashwat Goel. Everything below the line is the organisers' original README, unchanged.
 
+Project site: **https://mix-bloom-97447024.figma.site** (an overview of the approach, a demo
+match on fictional teams, and our measured results).
+
 ## Reproduce our submission
 
 You need Python 3 and the match data bundle. The data is not in this repo and can't be.
