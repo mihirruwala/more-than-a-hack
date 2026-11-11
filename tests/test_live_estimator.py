@@ -149,6 +149,37 @@ class LiveEstimatorTests(unittest.TestCase):
             out.extend(est.push(t, players, (50.0, 71.0)))
         self.assertEqual(out[-1].label, "D")
 
+    def _squad(self, n, speed, rng):
+        """12 players (6 a side) jogging along x at `speed` m/s; slot 0 is the home carrier."""
+        start = np.column_stack([np.linspace(20, 80, 12), rng.uniform(10, 58, 12)])
+        t = np.arange(n)[:, None, None] / 25.0
+        return start[None] + t * np.array([speed, 0.0]) + rng.normal(0, 0.05, (n, 12, 2))
+
+    def test_stoppage_with_hidden_ball_is_dead(self):
+        # Everyone stands around and the ball disappears next to a home player: the hidden
+        # ball's guessed position must not outvote a stoppage.
+        rng = np.random.RandomState(0)
+        teams = np.array([0] * 6 + [1] * 6)
+        players = self._squad(200, 0.0, rng)
+        est = LiveEstimator(teams, PITCH, lag=0)
+        out = []
+        for t in range(200):
+            ball = players[t, 0] + (0.5, 0.0) if t < 25 else None
+            out.extend(est.push(t, players[t], ball))
+        self.assertEqual(out[-1].label, "D")
+
+    def test_hidden_ball_in_open_play_stays_with_the_team(self):
+        # Same scene at a run (4 m/s): an occlusion in play, not a stoppage.
+        rng = np.random.RandomState(0)
+        teams = np.array([0] * 6 + [1] * 6)
+        players = self._squad(200, 4.0, rng)
+        est = LiveEstimator(teams, PITCH, lag=0)
+        out = []
+        for t in range(200):
+            ball = players[t, 0] + (0.5, 0.0) if t < 25 else None
+            out.extend(est.push(t, players[t], ball))
+        self.assertTrue(all(e.label == "H" for e in out[25:]))
+
     def test_no_ball_no_players_does_not_crash(self):
         est = LiveEstimator(self.teams, PITCH, lag=3)
         nan = np.full((2, 2), np.nan)

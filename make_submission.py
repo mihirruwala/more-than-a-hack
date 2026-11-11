@@ -11,7 +11,8 @@ The pipeline, with every setting spelled out here rather than taken from module 
 later change to a default cannot quietly change the submission:
 
   1. starter/live_estimator.py, offline: Kalman ball filter + sticky H/A/D HMM, smoothed over
-     each whole half, per-frame evidence raised to POWER
+     each whole half, per-frame evidence raised to POWER. The evidence itself (control radius,
+     dead-ball speed term, hidden-ball cap, ...) uses the constants at the top of that module.
   2. starter/postprocess.clean_segments with MIN_SPELL / MAX_GAP
   3. frames outside both halves are X
 

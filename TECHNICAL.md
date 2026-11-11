@@ -10,13 +10,15 @@ We label every frame with a small probabilistic model on top of the provided ATD
 A Kalman filter estimates where the ball is, including the 41% of graded frames where the
 tracking cannot see it. A three-state hidden Markov model (home, away, dead ball) turns
 per-frame evidence about who controls the ball into a label, using the whole half for
-hindsight. A last pass removes possessions too short to be real. No machine learning, no
-labelled data, and only the tactical ATD files are read.
+hindsight. A last pass removes possessions too short to be real. No machine learning, and
+only the tactical ATD files are read to produce the submission.
 
-On the public five minutes it scores spellF1 0.463 and macroF1 0.737, against 0.326 and
-0.621 for the published `baseline_smooth50`. That window holds 17 possessions and the
-scorer's bootstrap puts its noise band at about 0.33 spellF1, so these numbers only show the
-pipeline works. They are not evidence of a ranking.
+Settings were chosen away from the competition game: on simulated matches, and on two real
+matches from Metrica Sports' open sample data with labels rebuilt from their event logs. On
+those two matches the submitted pipeline scores spellF1 0.474 (0.435 with extra ball
+dropouts), against 0.408 (0.329) for the nearest-player baseline. The public five minutes of
+BAR-ATH were only used to check that the pipeline runs; at 17 possessions and a noise band of
+about 0.33 spellF1 they are not evidence of a ranking.
 
 ## Approach
 
@@ -47,13 +49,18 @@ seen, the score is also multiplied by how well the player's velocity matches the
 second factor matters more than anything else in the model. A defender pressing the
 carrier is often as close to the ball as the carrier, but runs at the ball rather than with
 it. Without the velocity test, possession kept flipping to the presser. A team's likelihood
-is `0.08 +` the best control score among its players.
+is `0.08 +` the best control score among its players. While the ball is unseen, each
+player's control score is capped at 0.25: the ball's position is then our own guess, and in
+the first version that guess, pinned to the last player near it, outvoted almost every
+stoppage.
 
 *Dead-ball evidence.* A base of 0.03, plus 3.0 if the ball is more than 0.5 m outside the
-pitch (and its position is known to within 3 m). If even the fastest tenth of players is
-moving under 2 m/s, add 0.25, plus 0.6 if the ball is also still with nobody on it, plus
-0.4 if it has been unseen for over 2 s. The median player speed is no use here, because most
-players walk or jog in open play too.
+pitch (and its position is known to within 3 m), plus `1.0 · sigmoid((2.0 − v90) / 0.4)`,
+where `v90` is the speed of the fastest tenth of players. If `v90` is under 2 m/s, add a
+further 0.6 if the ball is still with nobody on it, and 0.4 if it has been unseen for over
+2 s. On the two Metrica matches `v90` has a median of 1.5 m/s while the ball is dead and
+3.4 m/s in play, and it does not depend on the ball being seen. The median player speed is
+no use, because most players walk or jog in open play too.
 
 *Correlated frames.* Consecutive frames are close to the same observation, so treating each
 as independent evidence overstates it badly. Each likelihood is raised to the power 0.25
@@ -82,9 +89,10 @@ The ranking metric scores whole possessions, so the problem is mostly about time
 when possession really changed, not which player is nearest on a given frame. The
 nearest-player baseline already gets most frames right and still ranks poorly because it
 breaks possessions apart. A sticky state model is the simplest thing that treats a
-possession as something that lasts. We used hand-set parameters with physical meaning
-rather than a learned model because we had no labelled data on other games, and the
-provided game's labels may not be used for training.
+possession as something that lasts. We used a handful of parameters with physical meaning
+rather than a learned model: the provided game's labels may not be used for training, and
+the open labelled data we found (two Metrica matches) is enough to check a few settings but
+not to train on.
 
 ## Assets used and dropped
 
@@ -96,6 +104,7 @@ provided game's labels may not be used for training.
 | Homography | no | the ATD is already in pitch coordinates; we never needed pixels |
 | Tactical and broadcast video | no | |
 | Broadcast ATD | no | on a different timeline from the submission (164,488 vs 199,319 frames) |
+| Metrica Sports sample data, games 1 and 2 (external, [github.com/metrica-sports/sample-data](https://github.com/metrica-sports/sample-data)) | for validation only | two anonymised real matches, tracking + events; used to choose settings, never read by `make_submission.py`. See "Validation on other matches" |
 
 **Smart Tagging.** `starter/tag_prior.py` (behind `--tags`, off in the submission) turns tags
 into small per-frame nudges: attacking phases toward the tagged team, defending phases
@@ -110,7 +119,8 @@ the public window is the kind of tuning RULES.md rules out.
 
 ## Training data
 
-None. There is no learned component and no labelled data from any game.
+None: there is no learned component. Labelled data from other matches (Metrica, below) was
+used only to compare a small number of hand-set settings, which RULES.md allows.
 
 To choose settings without touching the match labels, we wrote a simulator
 (`starter/synthetic_match.py`). It plays out an invented match with 22 players, carries,
@@ -129,7 +139,47 @@ simulated matches:
 | same, plus cleanup | 0.604 | 72 |
 
 The simulator is crude, so these numbers show the design works on invented data and say
-nothing about the real leaderboard.
+nothing about the real leaderboard. (This table is the first version, before the dead-ball
+change below.)
+
+## Validation on other matches
+
+`tools/external_check.py` runs the pipeline on Metrica's sample games 1 and 2 (about 95
+minutes each, 25 fps, anonymised). Neither involves BAR-ATH. Metrica ships events, not
+possession labels, so we rebuild frame labels from the event log following CHALLENGE.md:
+`D` from the last live action before each restart (set piece or goal kick; from the foul
+itself after a foul) until the restart, otherwise the team of the last on-ball action, with
+challenges not moving possession, so a loose ball stays with the last team. That gives 376
+and 354 possessions, about 3.9 a minute (the public window has 3.4). These labels are an
+approximation of the competition's tracking-derived ground truth, so we read differences
+between settings, not absolute scores.
+
+Each game is also run with the ball hidden in extra bursts on about 40% of frames, the way
+BAR-ATH loses it. One trap: Metrica's tracking loses the ball on 84% of dead-ball frames but
+only 12% of live ones, so on this data "no ball" almost means "dead". BAR-ATH loses it mostly
+in live play (DATA.md). Any setting that only wins through "the ball is unseen" would not
+carry over, so we checked each candidate with that evidence switched off.
+
+The first run showed dead-ball recall of 8-14%: the team evidence from a hidden ball pinned
+to a nearby player outvoted almost every stoppage. `tools/dead_ball_study.py` then searched
+the graded player-speed term and the hidden-ball cap described in section 2 on the four
+Metrica runs plus three new simulated matches (seeds 101-103). The top settings form a broad
+plateau, within about 0.02 spellF1 of each other. We took its cautious end (the larger cap),
+because a smaller one discards more team evidence whenever the ball is hidden, which costs
+little on Metrica but is risky on BAR-ATH. Switching off the "unseen for 2 s" bonus changed
+the chosen setting's score by less than 0.001.
+
+spellF1 / macroF1, mean of the two Metrica games, submitted pipeline (power 0.25 + cleanup):
+
+| version | as tracked | extra ball dropouts |
+|---|---|---|
+| nearest player, 50-frame vote (the baseline) | 0.408 / 0.767 | 0.329 / 0.751 |
+| first version | 0.392 / 0.474 | 0.347 / 0.458 |
+| **submitted** | **0.474 / 0.766** | **0.435 / 0.758** |
+
+Dead-ball recall went from 8% to 84%. On the original 20-minute simulated match (seed 11)
+the offline pipeline went from 0.659 to 0.825 spellF1. The same data also confirmed the
+evidence power: 0.25 was the best of 0.1, 0.25, 0.5 and 1.0 in both Metrica runs.
 
 ## Possession rules we implemented
 
@@ -143,8 +193,8 @@ nothing about the real leaderboard.
 - **Challenges.** A defender close to the carrier but running at them, not with the ball,
   doesn't take possession. A successful tackle shows up as the defender moving with the ball
   afterwards, and possession switches once that persists.
-- **Dead ball.** Ball out of the pitch, or play visibly stopped (everyone slow, ball still or
-  unseen for a while). Short gaps inside one team's possession are bridged, because a ball
+- **Dead ball.** Ball out of the pitch, or play visibly stopped: even the fastest players
+  have slowed to a walk, more so if the ball is also still. Short gaps inside one team's possession are bridged, because a ball
   lost behind a crowd for two seconds is almost always an occlusion.
 - **Restarts.** No explicit model. After a stoppage, the first team to control the ball gets
   it.
@@ -157,35 +207,42 @@ change moved the scores in the direction the simulator predicted. Our first full
 36 possessions where the public window has 17. Fragmentation was already visible on the
 simulator; the fix (the evidence power) and its value were chosen on simulated matches. The
 public window was also used once for the Smart Tagging agreement check above, which led to
-leaving tags out. No threshold was fitted to it.
+leaving tags out. The dead-ball change was chosen entirely on Metrica and simulated matches.
+No threshold was fitted to the public window.
 
 | on the public window | macroF1 | spellF1 | possessions (truth 17) |
 |---|---|---|---|
 | `baseline_smooth50` (published floor) | 0.621 | 0.326 | 26 |
 | `baseline_smooth125` | 0.581 | 0.424 | 16 |
 | ours, first version (no evidence discount) | 0.709 | 0.317 | 36 |
-| **ours, submitted** | **0.737** | **0.463** | **21** |
+| ours, evidence power 0.25 + cleanup, before the dead-ball change | 0.737 | 0.463 | 21 |
+<!-- TODO: add the submitted version's row: python3 evaluation/run_evaluation.py -->
 
 ## Limitations
 
-- **Dead balls are the weakest class.** In our first full run, dead-ball recall was 0.39:
-  most stoppages were labelled as possession. We have not re-measured per-class numbers for
-  the final version. Stoppages where the ball is hidden and players keep moving are the main
-  gap.
+- **Dead balls.** Still the hardest call. A stoppage where players keep jogging (a quick
+  throw-in, a restart taken at pace) looks like play. On BAR-ATH we cannot measure
+  dead-ball recall without tuning on the public window, so the 84% above is a Metrica
+  number.
+- **Validation labels are approximate.** The Metrica labels come from event logs, not from
+  corrected tracking, and only two matches were available.
+- **Live mode.** The dead-ball change helps the offline pipeline but makes the zero-lag live
+  estimator more fragmented on simulated matches (spellF1 0.485 to 0.411). The replay view in
+  Barca Lab uses a lag, and the submission is offline, so neither is affected.
 - **Transition timing.** Reducing fragmentation also cut matched possession changes (transF1
   0.295 to 0.18 on the public window): we now detect fewer of the real changes of
   possession.
-- **Hand-set parameters.** Radii, speeds and switch rates are football priors checked only
-  on a simulator. Real tracking differs: it has 46 track slots for 22 players because of
+- **Hand-set parameters.** Radii, speeds and switch rates are football priors, checked on a
+  simulator and two real matches. Real tracking differs: it has 46 track slots for 22 players because of
   identity switches (we only use each slot's team, so this matters little), and contested
   balls are messier than our simulator makes them.
 - **No restart model.** Knowing which team takes a throw-in or goal kick would fix the first
   seconds after many stoppages.
 
-With more time we would build a dead-ball detector from physical cues (players walking to
-set-piece positions, the ball standing on a restart spot, long tracking gaps) and test it on
-a better simulator. With labelled data from other matches, the hand-set evidence model could
-be replaced by a learned one.
+With more time we would add more open matches (for example the seven Bundesliga matches of
+the IDSSE dataset) to validate on, model restarts explicitly (players walking to set-piece
+positions, the ball standing on a restart spot), and with enough labelled matches replace the
+hand-set evidence model with a learned one.
 
 ## Reproduction
 
@@ -199,11 +256,15 @@ This writes `evaluation/results/Team_MSN.csv`, runs the official validator and p
 file's SHA-256. The pipeline is deterministic, so two runs give the same file. The tests
 need no match data: `python3 -m unittest discover -s tests`.
 
+To reproduce the validation, download Metrica's `Sample_Game_{1,2}_RawTrackingData_{Home,Away}_Team.csv`
+and `Sample_Game_{1,2}_RawEventsData.csv` into `external/metrica/` (gitignored), then run
+`python3 tools/external_check.py` and `python3 tools/dead_ball_study.py`.
+
 ## Tooling
 
 The code and this document were written with the help of Claude Code, an AI coding
-assistant. It worked from the repository's documentation and from synthetic data, and it did
-not read the match files. The team ran everything that touches the match data on our own
+assistant. It worked from the repository's documentation, synthetic data and the public
+Metrica sample matches, and it did not read the BAR-ATH match files. The team ran everything that touches the match data on our own
 machines.
 
 `web/` holds Barca Lab, a local web console we built alongside the pipeline: an experiment

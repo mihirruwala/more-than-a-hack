@@ -75,6 +75,15 @@ SLOW_PLAYERS = 2.0        # m/s: if even the fastest tenth of players is below t
                           # players are walking or jogging too.
 STILL_BALL = 0.6          # m/s: ball speed below this, with nobody on it, looks placed
 HIDDEN_LONG = 2.0         # s: ball unseen this long while everyone walks -> probably dead
+DEAD_SPEED_GAIN = 1.0     # dead-ball evidence from players slowing down, graded rather than a
+DEAD_SPEED_MID = 2.0      # step: gain * sigmoid((mid - fastest-tenth speed) / width), m/s.
+DEAD_SPEED_WIDTH = 0.4    # On Metrica games 1-2 the fastest tenth runs a median 1.5 m/s when the
+                          # ball is dead and 3.4 m/s in play, independent of whether the ball is
+                          # seen. Chosen with tools/dead_ball_study.py on Metrica + simulations.
+HIDDEN_CONTROL_CAP = 0.25 # team control from a ball we cannot see is capped at this: a hidden
+                          # ball's position is our own guess, so it should not outvote a
+                          # stoppage. Cautious end of the plateau, since BAR-ATH loses the ball
+                          # mostly in live play (DATA.md).
 P_SWITCH = 0.004          # per-frame chance possession changes team
 P_TO_DEAD = 0.002         # per-frame chance play stops
 P_FROM_DEAD = 0.004       # per-frame chance play restarts
@@ -388,6 +397,8 @@ class LiveEstimator(object):
             mismatch[np.isnan(mismatch)] = MATCH_SPEED  # unknown velocity: neutral-ish
             control = control * (0.25 + 0.75 * np.exp(-mismatch ** 2 / (2 * MATCH_SPEED ** 2)))
         control[np.isnan(control)] = 0.0
+        if not seen:
+            control = np.minimum(control, HIDDEN_CONTROL_CAP)
         team_lik = [FLOOR + float(control[self.teams == team].max(initial=0.0))
                     for team in (0, 1)]
 
@@ -397,7 +408,8 @@ class LiveEstimator(object):
         outside = (x < -OUT_MARGIN or x > length + OUT_MARGIN or y < -OUT_MARGIN
                    or y > width + OUT_MARGIN)
         finite = speeds[np.isfinite(speeds)]
-        slow = len(finite) >= 6 and float(np.percentile(finite, 90)) < SLOW_PLAYERS
+        p90 = float(np.percentile(finite, 90)) if len(finite) >= 6 else None
+        slow = p90 is not None and p90 < SLOW_PLAYERS
         nobody_on_it = not np.any(distance[~np.isnan(distance)] < CONTROL_RADIUS * 0.6)
         still = seen and float(np.linalg.norm(self.ball.velocity)) < STILL_BALL and nobody_on_it
         unseen_long = self.hidden_frames > HIDDEN_LONG * self.fps
@@ -405,8 +417,9 @@ class LiveEstimator(object):
         dead = DEAD_FLOOR
         if outside and sigma < 3.0:
             dead += 3.0
+        if p90 is not None:
+            dead += DEAD_SPEED_GAIN / (1.0 + np.exp(-(DEAD_SPEED_MID - p90) / DEAD_SPEED_WIDTH))
         if slow:
-            dead += 0.25
             if still:
                 dead += 0.6
             if unseen_long:
