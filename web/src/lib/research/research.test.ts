@@ -22,7 +22,8 @@ describe("querying experiments", () => {
   it("filters by status, model and category", () => {
     expect(queryExperiments(seedExperiments, { ...defaultQuery, status: "planned" }).map((e) => e.id)).toEqual(["EXP-003"]);
     expect(queryExperiments(seedExperiments, { ...defaultQuery, modelId: "baseline-smooth50" })).toHaveLength(0);
-    expect(queryExperiments(seedExperiments, { ...defaultQuery, category: "post-processing" })).toHaveLength(3);
+    expect(queryExperiments(seedExperiments, { ...defaultQuery, category: "post-processing" })).toHaveLength(2);
+    expect(queryExperiments(seedExperiments, { ...defaultQuery, category: "evaluation" })).toHaveLength(1);
   });
 
   it("searches name, id, hypothesis and observations, case-insensitively", () => {

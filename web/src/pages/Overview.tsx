@@ -85,7 +85,7 @@ export function Overview() {
           label="Current model"
           value={current ? current.name : "None"}
           note={current ? `${current.version} · ${current.source || "no source yet"}` : "No model records. Reset the registry to restore them."}
-          foot={<span className={s.chip}>Not yet scored on the match</span>}
+          foot={<span className={s.chip}>Full match not scored yet</span>}
           className={s.statWide}
         />
         <Stat

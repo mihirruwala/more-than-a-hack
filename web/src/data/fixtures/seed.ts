@@ -2,8 +2,9 @@
 //
 // Every record describes work that happened in this repository, or work that is
 // explicitly planned. Numbers are the real outputs of tests/test_postprocess.py on synthetic data
-// (labelled synthetic) or quotes from EVALUATION.md (labelled published). Nothing is verified,
-// because no run of the official scorer on the match has been recorded yet.
+// (labelled synthetic), quotes from EVALUATION.md (labelled published), or our own local run of the
+// official scorer on the public five minutes (labelled manual). Nothing is verified: only the
+// organisers can score the full match.
 
 import type { Experiment, ExperimentMetric, LogEntry, ModelVersion } from "../../types";
 
@@ -28,6 +29,16 @@ const synthetic = (id: string, key: string, value: number, source: string, time:
   scope: "synthetic",
   source,
   recordedAt: at(time),
+});
+
+const publicWindow = (id: string, key: string, value: number): ExperimentMetric => ({
+  id,
+  key,
+  value,
+  provenance: "manual",
+  scope: "public-window",
+  source: "Our local run of evaluation/run_evaluation.py on the public five minutes, 2026-11-11",
+  recordedAt: "2026-11-11T20:00:00.000Z",
 });
 
 export const seedModels: ModelVersion[] = [
@@ -70,28 +81,33 @@ export const seedModels: ModelVersion[] = [
     metrics: [],
     limitations:
       "A 3 s gap bridge can merge two real possessions when the same team restarts quickly. Tested on synthetic data only.",
-    notes: "Not yet run on the baseline's match output. That needs the gated data and happens locally, never in the browser.",
+    notes: "Runs after the possession model in the submission (make_submission.py).",
     createdAt: at("10:30"),
     updatedAt: at("11:10"),
     origin: "seed",
   },
   {
-    id: "state-machine-v0",
-    name: "Possession state machine",
-    version: "v0 (proposal)",
+    id: "possession-hmm-v1",
+    name: "Ball filter + possession HMM",
+    version: "v1 (submitted)",
     kind: "candidate",
     category: "state model",
-    status: "planned",
+    status: "implemented",
     summary:
-      "An explicit H / A / D state model. A team change needs sustained evidence of control, and D needs evidence of a stoppage, not just a missing ball.",
+      "A Kalman filter estimates the ball, including while it is hidden. Per-frame evidence (near the ball and moving with it; players slowing to a walk for a stoppage) feeds a sticky H / A / D hidden Markov model, smoothed over each half. Segment cleanup runs last.",
     intendedBehaviour:
-      "Fewer false possession changes and a dead-ball class that means something.",
-    source: "",
+      "Fewer false possession changes, and a dead-ball class that means a stoppage rather than a lost ball.",
+    source: "starter/live_estimator.py, make_submission.py",
     features: ["spatial", "motion", "temporal", "dead-ball"],
-    params: {},
-    metrics: [],
-    limitations: "Not implemented. Every benefit listed here is a hypothesis.",
-    notes: "Candidate for the next research step after segment cleanup has been evaluated.",
+    params: { evidence_power: 0.25, dead_speed_mid: 2.0, hidden_control_cap: 0.25, min_spell: 25, max_gap: 75 },
+    metrics: [
+      publicWindow("possession-hmm-v1-M1", "spellF1", 0.4914),
+      publicWindow("possession-hmm-v1-M2", "macroF1", 0.8227),
+    ],
+    limitations:
+      "Quick restarts taken at pace look like play. Transition timing is weak (transition F1 0.18 on the public window). Settings were checked on simulated matches and only two open real matches.",
+    notes:
+      "On Metrica sample games 1 and 2 (labels rebuilt from events): spellF1 0.474 vs 0.408 for the nearest-player baseline, and 84% of dead-ball frames detected. The public-window scores above check the pipeline; they can't rank versions.",
     createdAt: at("12:00"),
     updatedAt: at("12:00"),
     origin: "seed",
@@ -154,18 +170,18 @@ export const seedExperiments: Experiment[] = [
   },
   {
     id: "EXP-003",
-    name: "Segment cleanup on baseline_smooth50, full match",
+    name: "Validate on the IDSSE Bundesliga matches",
     hypothesis:
-      "Applying segment cleanup to the ±50 baseline raises full-match spellF1 by more than the 0.04 noise band.",
-    category: "post-processing",
+      "The submitted settings hold up on seven more open matches with professional tracking, as they did on the two Metrica matches.",
+    category: "evaluation",
     status: "planned",
-    modelId: "postprocess-v0-1",
+    modelId: "possession-hmm-v1",
     revision: "",
-    params: { min_spell: 25, max_gap: 75, base: "baseline_smooth50" },
-    expectedOutcome: "A higher spellF1 than 0.2433, with bootstrap intervals that don't overlap.",
-    risks: "Bridging quick same-team restarts merges real possessions. Tuning on the public 5 minutes would pick the wrong values.",
+    params: { matches: 7, labels: "rebuilt from events" },
+    expectedOutcome: "spellF1 above the nearest-player baseline on most matches, and dead-ball recall well above the first version's 8%.",
+    risks: "Labels rebuilt from event logs only approximate the competition's tracking-derived ground truth.",
     observations: "",
-    limitations: "Needs the gated match data. It runs locally with the official scorer, never in the browser.",
+    limitations: "Open data only. The competition match is never used for this.",
     metrics: [],
     statusHistory: [{ status: "planned", at: at("12:10") }],
     createdAt: at("12:10"),
@@ -213,6 +229,22 @@ export const seedLog: LogEntry[] = [
     kind: "limitation",
     title: "A 3 s gap bridge can merge two real possessions",
     body: "If the ball goes briefly dead and the same team restarts, the truth has two possessions, and the cleanup joins them into one.",
+    origin: "manual",
+  },
+  {
+    id: "L-006",
+    date: "2026-11-11",
+    kind: "experiment",
+    title: "Dead-ball recall 8% → 84% on Metrica",
+    body: "A graded player-speed term and a cap on hidden-ball control, chosen on two open Metrica matches and simulations. Submitted pipeline: spellF1 0.392 → 0.474 on Metrica.",
+    origin: "manual",
+  },
+  {
+    id: "L-007",
+    date: "2026-11-11",
+    kind: "milestone",
+    title: "Submission file built and repository made public",
+    body: "make_submission.py regenerates Team_MSN.csv byte for byte; the SHA-256 is in TECHNICAL.md.",
     origin: "manual",
   },
 ];

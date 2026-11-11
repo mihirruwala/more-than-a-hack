@@ -117,7 +117,7 @@ function Detail({ experiment: e, modelLabel, modelExists }: { experiment: Experi
             </div>
             {e.metrics.length === 0 ? (
               <EmptyState title="No metrics recorded">
-                Record a value once you have one, and say where it came from. Hand-entered values are labelled manual or synthetic. Verified is reserved for imported scorer output, which isn't connected yet.
+                Record a value once you have one, and say where it came from. Hand-entered values are labelled manual or synthetic. Verified values only come from a scorer report imported on the Runs page.
               </EmptyState>
             ) : (
               <div className={t.wrap}>

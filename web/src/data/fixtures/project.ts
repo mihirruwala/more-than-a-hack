@@ -9,7 +9,7 @@ export const project: ProjectInfo = {
   tagline: "Football Intelligence & Possession Research",
   phase: "MTAH 2027 · Phase 1: ball possession",
   deadline: "2026-11-17",
-  currentModelId: "postprocess-v0-1",
+  currentModelId: "possession-hmm-v1",
 };
 
 /** The four published baseline variants, full match, quoted from EVALUATION.md. */
@@ -48,18 +48,24 @@ export const milestones: Milestone[] = [
     id: "m3",
     title: "Research console: registry, Model Lab, Match Centre",
     detail: "The web/ app, with local persistence and provenance on every number.",
-    status: "active",
+    status: "done",
   },
   {
     id: "m4",
-    title: "Run segment cleanup on the baseline output (EXP-003)",
-    detail: "Needs the gated match data. Runs locally only, never in the browser.",
-    status: "blocked",
+    title: "Possession model and dead-ball detection",
+    detail: "Ball filter and sticky H/A/D model, checked on two open Metrica matches. Used for the submission.",
+    status: "done",
   },
   {
     id: "m5",
-    title: "Write the technical document",
-    detail: "Approach, the assets used, the possession rules and the limitations.",
+    title: "Technical document and public repository",
+    detail: "TECHNICAL.md covers the approach, assets, possession rules, validation and limitations.",
+    status: "done",
+  },
+  {
+    id: "m6",
+    title: "Submit through the organisers' form",
+    detail: "Team_MSN.csv, the repository link and TECHNICAL.md.",
     status: "todo",
     due: "2026-11-17",
   },

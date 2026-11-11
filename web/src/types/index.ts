@@ -5,8 +5,8 @@
  * Where a number came from, and therefore how far it can be trusted.
  *
  * - published  quoted from the competition's own documentation (e.g. EVALUATION.md)
- * - verified   produced by the official scorer and imported from its output. Reserved: the UI
- *              cannot create it until a real scorer integration exists.
+ * - verified   produced by the official scorer and imported from its report (Lab → Runs). It
+ *              can't be typed in by hand.
  * - manual     typed in by a person; never treated as verified
  * - synthetic  computed on synthetic data (e.g. unit-test fixtures), not on the match
  * - demo       illustrative only; invented for the UI and meaningless as a result

@@ -139,12 +139,13 @@ export function Landing() {
           <div>
             <SectionLabel>Results</SectionLabel>
             <h2 id="results-title" className={`display ${s.h2}`}>
-              Evaluation in progress
+              Submitted, awaiting the full-match score
             </h2>
             <p className={s.resultsText}>
-              No score of ours is published yet. A result appears here only after the official
-              scorer has run on a submission and the run has been recorded. Until then, the one
-              number shown is the published baseline we have to beat.
+              Only the organisers can score the full match, so no verified score of ours exists
+              yet. On two open Metrica matches our pipeline scores spellF1 0.474, against 0.408
+              for the nearest-player baseline. TECHNICAL.md has the details. The number shown here
+              is the published baseline on the competition match.
             </p>
           </div>
           <div className={s.floorCard}>
