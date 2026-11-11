@@ -65,3 +65,6 @@ env/
 
 # Replays of the real match hold tracking-derived positions: local only, never committed.
 evaluation/replays/
+
+# Third-party datasets for off-match validation (tools/external_check.py): local only.
+external/
