@@ -23,6 +23,13 @@ npm run dev        # http://localhost:5173, with hot reload
 |---|---|
 | `/`, `/match`, `/methodology` | public site: landing page, Match Centre (demo data), methodology |
 | `/lab`, `/lab/models`, `/lab/experiments`, `/lab/runs`, `/lab/live`, `/lab/log` | research console (local only, no login) |
+| `/lab/console` | Match console: the estimator played back broadcast-style; can load any local replay |
+
+The Match console in `web/src/pages/console/console.tsx` is also the project site's `/console`
+page: the site (Figma Make) runs the same file, plus `consoleReplay.ts`, a packed copy of the
+bundled synthetic replay. After changing either, rebuild the packed copy with
+`python3 tools/pack_console_replay.py` and paste both files into the Figma Make project.
+`siteTheme.css` is the site's stylesheet, scoped so the lab page looks the same.
 
 `web/README.md` has the full route list and the code layout. To check a change, run
 `npm test`, `npm run typecheck` and `npm run build`.
@@ -38,6 +45,8 @@ python tools/tag_agreement.py                            # Smart Tagging vs publ
 python tools/external_check.py                           # our settings on Metrica sample games 1-2
 python tools/dead_ball_study.py                          # dead-ball settings on Metrica + simulations
 python starter/live_estimator.py --synthetic             # live estimator on a simulated match, no data
+python starter/live_estimator.py --synthetic --replay web/src/data/fixtures/liveReplay.json
+                                                         # rebuild the bundled demo replay (with goalkeepers)
 python starter/live_estimator.py --lag 25                # real match: needs data/tactical/, writes
                                                          # evaluation/results/live_lag25.csv
 ```

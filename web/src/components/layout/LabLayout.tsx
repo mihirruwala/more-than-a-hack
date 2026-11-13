@@ -11,6 +11,7 @@ import {
   Menu,
   NotebookPen,
   Radio,
+  Crosshair,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const LAB: NavItem[] = [
   { to: "/lab/models", label: "Model Lab", icon: FlaskConical },
   { to: "/lab/experiments", label: "Experiments", icon: ListChecks },
   { to: "/lab/runs", label: "Runs & imports", icon: FileCheck2 },
+  { to: "/lab/console", label: "Match console", icon: Crosshair },
   { to: "/lab/live", label: "Live replay", icon: Radio },
   { to: "/lab/log", label: "Project Log", icon: NotebookPen },
 ];

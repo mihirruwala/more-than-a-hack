@@ -1,0 +1,56 @@
+/* Lab-only additions around the shared console. Colours come from siteTheme.css's tokens. */
+
+.shell {
+  min-height: 100vh;
+}
+
+/* The site hides its nav behind a menu button on phones; the lab has only four links, so keep them. */
+@media (max-width: 767px) {
+  .nav {
+    display: flex !important;
+    position: static !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: none !important;
+    gap: 12px;
+    font-size: 13px;
+  }
+}
+
+.loadCard {
+  padding: 24px;
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.loadCard p {
+  color: var(--muted);
+  font-size: 14px;
+}
+.loadCard code {
+  font-family: "JetBrains Mono", "JetBrains Mono Variable", monospace;
+  font-size: 12px;
+}
+.loadCard label {
+  cursor: pointer;
+}
+.loadCard label:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.error {
+  color: var(--amber) !important;
+}
+.command {
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow-x: auto;
+  max-width: 100%;
+}

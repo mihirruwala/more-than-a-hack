@@ -4,7 +4,9 @@ Our entry for the ball possession challenge, by Mihir Ruwala, Sneha Jakhotiya, U
 Shashwat Goel. Everything below the line is the organisers' original README, unchanged.
 
 Project site: https://mix-bloom-97447024.figma.site (an overview of the approach, a demo
-match on fictional teams, and our measured results).
+match on fictional teams, and our measured results). Its
+[Console](https://mix-bloom-97447024.figma.site/console) plays our live estimator back on a
+simulated match, frame by frame, next to the simulator's ground truth.
 
 ## Reproduce our submission
 
