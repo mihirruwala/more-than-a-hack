@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { CONSOLE_REPLAY } from "./consoleReplay";
 
 // Match console: the live estimator played back on a simulated match, broadcast style.
-// Source of truth: web/src/pages/console/console.tsx in github.com/mihirruwala/more-than-a-hack.
-// The project site (Figma Make) runs this same file; the lab wraps it in MatchConsole.tsx.
+// Source of truth: web/src/site/console.tsx in github.com/mihirruwala/more-than-a-hack.
+// The project site (Figma Make) runs this file as src/console.tsx, with src/consoleReplay.ts.
 // Every number is computed from the replay; tracking has positions only, so no pose, shot or xG.
 
 type ReplayLabel = "H" | "A" | "D";
@@ -74,6 +74,90 @@ export function decodeReplay(): Replay {
     pAway.push(at(b + 6));
   }
   return { provenance: "synthetic", source: r.source, fps: r.fps, pitch: r.pitch, lag: r.lag, teams: r.teams, firstFrame: r.firstFrame, length: r.length, players, ball, est, label: r.label, pHome, pAway, truth: r.truth };
+}
+
+const REPLAY_FORMAT = "barca-lab-replay";
+/** The Python writer caps a replay at 600 s. */
+const MAX_FRAMES = 600 * 25;
+type ParseResult = { ok: true; replay: Replay } | { ok: false; error: string };
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const isPoint = (v: unknown): v is [number, number] => Array.isArray(v) && v.length >= 2 && isNum(v[0]) && isNum(v[1]);
+
+/** Validates a replay file written by live_estimator.py --replay. Every per-frame array must cover the same frames. */
+export function parseReplay(input: unknown): ParseResult {
+  let data = input;
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return { ok: false, error: "Not valid JSON." };
+    }
+  }
+  if (!data || typeof data !== "object") return { ok: false, error: "Not a replay record." };
+  const r = data as Record<string, unknown>;
+  if (r.format !== REPLAY_FORMAT) return { ok: false, error: `Not a replay file (format should be "${REPLAY_FORMAT}").` };
+  if (r.version !== 1) return { ok: false, error: `Unsupported replay version ${String(r.version)}; this page reads version 1.` };
+  if (r.provenance !== "synthetic" && r.provenance !== "local-run") return { ok: false, error: "Unknown provenance." };
+  if (!isNum(r.fps) || r.fps <= 0 || r.fps > 120) return { ok: false, error: "fps must be a positive number." };
+  if (!isPoint(r.pitch) || r.pitch[0] <= 0 || r.pitch[1] <= 0) return { ok: false, error: "pitch must be [length, width] in metres." };
+  if (!isNum(r.lag) || r.lag < 0) return { ok: false, error: "lag must be a frame count." };
+  if (!isNum(r.firstFrame)) return { ok: false, error: "firstFrame is missing." };
+  if (!Array.isArray(r.teams) || r.teams.length === 0 || !r.teams.every((t) => t === 0 || t === 1)) return { ok: false, error: "teams must list 0 (home) or 1 (away) per track." };
+  const f = r.frames as Record<string, unknown> | undefined;
+  if (!f || typeof f !== "object") return { ok: false, error: "frames is missing." };
+  const label = f.label;
+  if (typeof label !== "string" || label.length === 0) return { ok: false, error: "frames.label is missing." };
+  const n = label.length;
+  if (n > MAX_FRAMES) return { ok: false, error: "Replay is longer than 600 s." };
+  if (!/^[HADX]+$/.test(label)) return { ok: false, error: "frames.label may only contain H, A, D and X." };
+  if (!/[HAD]/.test(label)) return { ok: false, error: "frames.label has no answered frame (all X)." };
+  for (const key of ["players", "ball", "est", "pHome", "pAway"] as const) {
+    if (!Array.isArray(f[key]) || (f[key] as unknown[]).length !== n) return { ok: false, error: `frames.${key} must have ${n} entries, one per frame.` };
+  }
+  const slots = r.teams.length * 2;
+  const players = f.players as unknown[];
+  for (let i = 0; i < n; i++) {
+    const row = players[i];
+    if (!Array.isArray(row) || row.length !== slots || !row.every((v) => v === null || isNum(v))) return { ok: false, error: `frames.players[${i}] must hold ${slots} numbers or nulls.` };
+  }
+  const ball = f.ball as unknown[];
+  const est = f.est as unknown[];
+  const pHome = f.pHome as unknown[];
+  const pAway = f.pAway as unknown[];
+  for (let i = 0; i < n; i++) {
+    if (ball[i] !== null && !isPoint(ball[i])) return { ok: false, error: `frames.ball[${i}] must be [x, y] or null.` };
+    const e = est[i];
+    if (e !== null && !(isPoint(e) && ((e as unknown[])[2] === null || isNum((e as unknown[])[2])))) return { ok: false, error: `frames.est[${i}] must be [x, y, sigma] or null.` };
+    const h = pHome[i];
+    const a = pAway[i];
+    if (!isNum(h) || !isNum(a) || h < 0 || a < 0 || h + a > 101) return { ok: false, error: `frames.pHome/pAway[${i}] must be percentages.` };
+  }
+  let truth: string | undefined;
+  if (f.truth !== undefined) {
+    if (typeof f.truth !== "string" || f.truth.length !== n || !/^[HADX]+$/.test(f.truth)) return { ok: false, error: "frames.truth must be one H/A/D/X per frame." };
+    if (r.provenance !== "synthetic") return { ok: false, error: "Only synthetic replays may carry ground truth." };
+    truth = f.truth;
+  }
+  return {
+    ok: true,
+    replay: {
+      provenance: r.provenance,
+      source: typeof r.source === "string" ? r.source : "unknown",
+      fps: r.fps,
+      pitch: [r.pitch[0], r.pitch[1]],
+      lag: r.lag,
+      teams: r.teams as (0 | 1)[],
+      firstFrame: r.firstFrame,
+      length: n,
+      players: players as (number | null)[][],
+      ball: ball as ([number, number] | null)[],
+      est: est as ([number, number, number | null] | null)[],
+      label,
+      pHome: pHome as number[],
+      pAway: pAway as number[],
+      truth,
+    },
+  };
 }
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -500,7 +584,8 @@ function BroadcastPitch({
     const [tx, ty] = P(lerp(analytics.camX[view.index]!, analytics.camX[n1]!, view.frac), lerp(analytics.camY[view.index]!, analytics.camY[n1]!, view.frac));
     const ox = STAGE_W / 2 - ZOOM * tx;
     const floor = STAGE_H - ZOOM * P(L / 2, W + 5)[1]; // keep the near apron at the bottom edge
-    const oy = Math.max(floor, Math.min(0, STAGE_H * 0.56 - ZOOM * ty));
+    const ceiling = -ZOOM * (P(L / 2, -4, 0.9)[1] - 36); // and no more than a strip of stand above the far boards
+    const oy = Math.max(floor, Math.min(ceiling, STAGE_H * 0.56 - ZOOM * ty));
     zoom = `translate(${ox.toFixed(1)} ${oy.toFixed(1)}) scale(${ZOOM})`;
   }
 
@@ -698,12 +783,60 @@ const CAMERAS: { value: CameraMode; label: string }[] = [
 ];
 
 /** The Match console page: the live estimator played back on a simulated match. */
-export function ConsolePage({ replay: given, extra }: { replay?: Replay; extra?: ReactNode } = {}) {
-  const replay = useMemo(() => given ?? decodeReplay(), [given]);
+export function ConsolePage() {
+  const builtIn = useMemo(decodeReplay, []);
+  const [custom, setCustom] = useState<{ replay: Replay; name: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const onPick = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    // Read in this tab only: the file is never stored or uploaded.
+    const parsed = parseReplay(await file.text());
+    if (!parsed.ok) {
+      setError(`${file.name}: ${parsed.error}`);
+      return;
+    }
+    setError(null);
+    setCustom({ replay: parsed.replay, name: file.name });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const picker = (
+    <section className={`card ${s.card} ${s.picker}`} aria-labelledby="mc-own">
+      <div className="chart-heading">
+        <h3 id="mc-own">Watch your own replay</h3>
+        <span className={s.tag}>stays in your browser</span>
+      </div>
+      <p className={s.pickerText}>
+        Run our estimator and load the file it writes. It is read in this tab and never uploaded, so a replay of real tracking stays on your machine.
+      </p>
+      <pre className={s.command}>python3 starter/live_estimator.py --synthetic --replay my_replay.json</pre>
+      <div className={s.pickerActions}>
+        <label className="button button-secondary">
+          <input type="file" accept=".json,application/json" onChange={onPick} className={s.sr} />
+          <Glyph name="Upload" size={16} /> Choose a replay file
+        </label>
+        {custom && (
+          <button type="button" className="text-link" onClick={() => setCustom(null)}>
+            Back to the built-in match
+          </button>
+        )}
+      </div>
+      {custom && <p className={s.note}>Showing {custom.name}.</p>}
+      {error && (
+        <p className={s.pickError} role="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+
   return (
     <main id="main-content" className="page">
       <style>{CONSOLE_CSS}</style>
-      <Console replay={replay} extra={extra} />
+      <Console key={custom?.name ?? "built-in"} replay={custom?.replay ?? builtIn} extra={picker} />
     </main>
   );
 }
@@ -983,6 +1116,7 @@ const GLYPHS: Record<string, string> = {
   Rewind: "M11 6 4 12l7 6zM20 6l-7 6 7 6z",
   SkipBack: "M18 6 9 12l9 6zM6 6h2v12H6z",
   SkipForward: "M6 6l9 6-9 6zM16 6h2v12h-2z",
+  Upload: "M11 16V7.8L8.4 10.4 7 9l5-5 5 5-1.4 1.4L13 7.8V16zM5 20v-5h2v3h10v-3h2v5z",
 };
 
 function Glyph({ name, size = 15 }: { name: string; size?: number }) {
@@ -1679,6 +1813,18 @@ const CONSOLE_CSS = `/* Match console. Built on the site's own classes and token
 .mc-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .mc-dataGrid { display: grid; grid-template-columns: 7fr 5fr; gap: 24px; align-items: start; }
 .mc-side { display: grid; gap: 24px; }
+.mc-picker { display: grid; gap: 14px; }
+.mc-picker .chart-heading { margin-bottom: 0; }
+.mc-pickerText { color: var(--muted); font-size: 14px; line-height: 22px; }
+.mc-command {
+  margin: 0; padding: 10px 12px; border-radius: 4px; background: var(--surface-2); overflow-x: auto;
+  font: 12px/18px "JetBrains Mono", "JetBrains Mono Variable", monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.mc-pickerActions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.mc-pickerActions label { cursor: pointer; }
+.mc-pickerActions label:focus-within { outline: 3px solid var(--focus); outline-offset: 3px; }
+.mc-pickerActions .text-link { background: none; border: 0; padding: 0; cursor: pointer; }
+.mc-pickError { color: var(--amber); font-size: 13px; line-height: 20px; }
 .mc-dataGrid .callout li + li { margin-top: 8px; }
 .mc-dataGrid .callout ul { list-style: disc; }
 .mc-card { padding: 24px; }
@@ -1765,7 +1911,7 @@ const CONSOLE_CSS = `/* Match console. Built on the site's own classes and token
 @media (max-width: 767px) {
   .mc-layers { grid-template-columns: 1fr; }
   .mc-controls { grid-template-columns: 48px 1fr; }
-  .mc-controls .timecode { text-align: right; }
+  .mc-controls .timecode { grid-column: 1 / -1; white-space: nowrap; }
   .mc-controls input[type="range"] { grid-column: 1 / -1; }
   .mc-stripRow { grid-template-columns: 1fr; gap: 6px; }
   .mc-axis { margin-left: 0; }

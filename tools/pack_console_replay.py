@@ -16,7 +16,7 @@ import struct
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "web", "src", "data", "fixtures", "liveReplay.json")
-OUT = os.path.join(ROOT, "web", "src", "pages", "console", "consoleReplay.ts")
+OUT = os.path.join(ROOT, "web", "src", "site", "consoleReplay.ts")
 STEP = 2
 NA = -32768
 

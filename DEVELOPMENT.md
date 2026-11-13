@@ -23,13 +23,13 @@ npm run dev        # http://localhost:5173, with hot reload
 |---|---|
 | `/`, `/match`, `/methodology` | public site: landing page, Match Centre (demo data), methodology |
 | `/lab`, `/lab/models`, `/lab/experiments`, `/lab/runs`, `/lab/live`, `/lab/log` | research console (local only, no login) |
-| `/lab/console` | Match console: the estimator played back broadcast-style; can load any local replay |
 
-The Match console in `web/src/pages/console/console.tsx` is also the project site's `/console`
-page: the site (Figma Make) runs the same file, plus `consoleReplay.ts`, a packed copy of the
-bundled synthetic replay. After changing either, rebuild the packed copy with
-`python3 tools/pack_console_replay.py` and paste both files into the Figma Make project.
-`siteTheme.css` is the site's stylesheet, scoped so the lab page looks the same.
+The project site's Console page (https://mix-bloom-97447024.figma.site/console) lives in
+`web/src/site/`: `console.tsx` is the page exactly as the site (Figma Make) runs it, and
+`consoleReplay.ts` is a packed copy of the bundled synthetic replay. The web app does not route
+to them; `npm test` checks them. To change the page, edit `console.tsx`, run
+`python3 tools/pack_console_replay.py` if the replay changed, and paste both files into the
+Figma Make project's `src/`.
 
 `web/README.md` has the full route list and the code layout. To check a change, run
 `npm test`, `npm run typecheck` and `npm run build`.

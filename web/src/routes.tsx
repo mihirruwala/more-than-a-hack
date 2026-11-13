@@ -14,7 +14,6 @@ import { Methodology } from "./pages/methodology/Methodology";
 import { EditModel, NewModel } from "./pages/models/ModelEditor";
 import { ModelLab } from "./pages/models/ModelLab";
 import { LiveReplay } from "./pages/live/LiveReplay";
-import { MatchConsole } from "./pages/console/MatchConsole";
 import { Runs } from "./pages/runs/Runs";
 
 function Root() {
@@ -40,8 +39,6 @@ export const routes: RouteObject[] = [
           { path: "*", element: <NotFound /> },
         ],
       },
-      // Full-bleed dashboard, outside both layouts.
-      { path: "lab/console", element: <MatchConsole /> },
       {
         path: "lab",
         element: <LabLayout />,

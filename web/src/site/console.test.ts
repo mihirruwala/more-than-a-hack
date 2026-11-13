@@ -1,13 +1,29 @@
 import { describe, expect, it } from "vitest";
-import builtIn from "../../data/fixtures/liveReplay.json";
-import { parseReplay } from "../../lib/replay";
-import { analyse, decodeReplay, frameAt, heatmap, percentile, slotName, teamTotals, type Replay } from "./console";
+import builtIn from "../data/fixtures/liveReplay.json";
+import { analyse, decodeReplay, frameAt, heatmap, parseReplay, percentile, slotName, teamTotals, type Replay } from "./console";
 
 function replay(): Replay {
   const parsed = parseReplay(builtIn);
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.replay;
 }
+
+describe("parseReplay", () => {
+  it("accepts the replay file live_estimator.py writes", () => {
+    const parsed = parseReplay(JSON.stringify(builtIn));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.replay.truth?.length).toBe(parsed.replay.length);
+  });
+
+  it("explains what is wrong with other files", () => {
+    expect(parseReplay("{").ok).toBe(false);
+    const wrong = parseReplay({ ...builtIn, format: "something-else" });
+    expect(wrong.ok).toBe(false);
+    if (!wrong.ok) expect(wrong.error).toContain("Not a replay file");
+    const real = parseReplay({ ...builtIn, provenance: "local-run" });
+    expect(real.ok).toBe(false); // truth may only travel with synthetic replays
+  });
+});
 
 describe("packed site replay", () => {
   it("decodes to every 2nd frame of the bundled replay", () => {
