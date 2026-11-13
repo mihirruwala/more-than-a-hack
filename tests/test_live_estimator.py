@@ -310,6 +310,25 @@ class Simulator(unittest.TestCase):
         self.assertLess(hidden, 0.6)
         self.assertTrue(set(a.labels) <= set("HAD"))
 
+    def test_goalkeepers_keep_goal(self):
+        match = simulate(6000, seed=11, goalkeepers=True)
+        length, width = match.pitch
+        home_gk, away_gk = match.players[:, 0], match.players[:, 11]
+        # Observed positions carry noise, so allow a metre on top of the penalty area.
+        self.assertLess(np.nanmax(home_gk[:, 0]), 17.5)
+        self.assertGreater(np.nanmin(away_gk[:, 0]), length - 17.5)
+        for keeper in (home_gk, away_gk):
+            self.assertLess(np.nanmax(np.abs(keeper[:, 1] - width / 2)), 20.15)
+        outfield = np.delete(match.players, [0, 11], axis=1)
+        self.assertGreater(np.nanmin(outfield[..., 0]), 1.0)
+        self.assertTrue(set(match.labels) <= set("HAD"))
+
+    def test_goalkeepers_are_opt_in(self):
+        # The default match is the one every test and tuning study was run on; it must not move.
+        a, b = simulate(1500, seed=9), simulate(1500, seed=9, goalkeepers=False)
+        np.testing.assert_array_equal(a.players, b.players)
+        np.testing.assert_array_equal(a.labels, b.labels)
+
 
 class EndToEnd(unittest.TestCase):
 

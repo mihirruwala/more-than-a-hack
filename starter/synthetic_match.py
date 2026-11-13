@@ -18,6 +18,10 @@ what it was designed to do; they say nothing about the real leaderboard.
     match.teams       # (22,) 0 = home, 1 = away
     match.labels      # (T,) ground truth "H" / "A" / "D"
 
+With goalkeepers=True, slot 0 (home) and slot 11 (away) keep goal: they stay near their own goal
+line and shade across with the ball instead of joining the outfield shape or pressing. It is off
+by default, so every seed already used for testing and tuning reproduces exactly.
+
 numpy only.
 """
 
@@ -42,10 +46,18 @@ MAX_SPEED_DEAD = 1.4
 BALL_NOISE = 0.25                # m, observation noise
 PLAYER_NOISE = 0.10
 DROPOUT_P = 0.0008               # per player per frame: chance a track starts a dropout
+GK_DEPTH = 5.0                   # m in front of the goal line where a goalkeeper sets up
+GK_RANGE = (1.5, 16.0)           # m from the goal line a goalkeeper will go: the penalty area
+GK_SHADE = 0.25                  # share of the ball's offset from the centre a keeper follows
+GK_SLOTS = (0, 11)
 
 
-def simulate(n_frames, seed=0, hidden_fraction=0.4, pitch=PITCH, fps=FPS):
-    """One continuous stretch of play, n_frames long. Deterministic for a given seed."""
+def simulate(n_frames, seed=0, hidden_fraction=0.4, pitch=PITCH, fps=FPS, goalkeepers=False):
+    """One continuous stretch of play, n_frames long. Deterministic for a given seed.
+
+    goalkeepers=True turns slots 0 and 11 into goalkeepers. It draws no extra random numbers,
+    so the rest of the match stays on the same random stream; play then diverges naturally.
+    """
     rng = np.random.RandomState(seed)
     length, width = pitch
     dt = 1.0 / fps
@@ -57,6 +69,11 @@ def simulate(n_frames, seed=0, hidden_fraction=0.4, pitch=PITCH, fps=FPS):
     anchor[:11, 0] = rng.uniform(8, length * 0.62, 11)
     anchor[11:, 0] = rng.uniform(length * 0.38, length - 8, 11)
     anchor[:, 1] = rng.uniform(5, width - 5, 22)
+    keeper = np.zeros(22, bool)
+    if goalkeepers:
+        keeper[list(GK_SLOTS)] = True
+        anchor[GK_SLOTS[0]] = (GK_DEPTH, width / 2)
+        anchor[GK_SLOTS[1]] = (length - GK_DEPTH, width / 2)
     pos = anchor + rng.normal(0, 2, (22, 2))
     vel = np.zeros((22, 2))
 
@@ -76,20 +93,30 @@ def simulate(n_frames, seed=0, hidden_fraction=0.4, pitch=PITCH, fps=FPS):
         # -- player motion --------------------------------------------------------------------
         shift = np.clip(ball - anchor, -25, 25) * 0.35
         target = anchor + shift
+        if goalkeepers:
+            for k in GK_SLOTS:
+                # Stay on the goal line's side of the box; shade towards the ball across it, and
+                # come off the line a little as the ball approaches.
+                own_line = 0.0 if teams[k] == HOME else length
+                closeness = max(0.0, 1.0 - abs(ball[0] - own_line) / (length / 2))
+                depth = np.clip(GK_DEPTH + closeness * 4.0, *GK_RANGE)
+                target[k, 0] = depth if teams[k] == HOME else length - depth
+                target[k, 1] = width / 2 + np.clip((ball[1] - width / 2) * GK_SHADE, -6.0, 6.0)
         vmax = np.full(22, MAX_SPEED_PLAY)
         if phase == "dead":
             vmax[:] = MAX_SPEED_DEAD
             if dead_restart is not None:
-                taker = _nearest(pos, dead_restart[1], teams == dead_restart[0])
+                taker = _nearest(pos, dead_restart[1], (teams == dead_restart[0]) & ~keeper)
                 target[taker] = dead_restart[1]
                 vmax[taker] = 3.0
         else:
             if phase == "carry":
-                target[carrier] = pos[carrier] + np.array([attack[carrier] * 6.0,
-                                                           rng.normal(0, 3)])
-                vmax[carrier] = 6.0
+                drift = rng.normal(0, 3)  # drawn whoever carries, so the stream never shifts
+                if not keeper[carrier]:  # a keeper with the ball holds it rather than dribbling
+                    target[carrier] = pos[carrier] + np.array([attack[carrier] * 6.0, drift])
+                    vmax[carrier] = 6.0
             if team_with_ball is not None:
-                presser = _nearest(pos, ball, teams != team_with_ball)
+                presser = _nearest(pos, ball, (teams != team_with_ball) & ~keeper)
                 # Jockey goal-side of the ball rather than standing on it; tackles are events.
                 target[presser] = ball + np.array([attack[carrier] * 1.8, 0.0]) \
                     if carrier is not None else ball
@@ -153,7 +180,7 @@ def simulate(n_frames, seed=0, hidden_fraction=0.4, pitch=PITCH, fps=FPS):
             if timer < fps * 2:
                 ball = spot.copy()  # ball placed for the restart
             if timer <= 0:
-                carrier = _nearest(pos, spot, teams == taker_team)
+                carrier = _nearest(pos, spot, (teams == taker_team) & ~keeper)
                 pos[carrier] = spot + rng.normal(0, 0.3, 2)
                 ball = pos[carrier].copy()
                 phase, timer, dead_restart = "carry", _seconds(rng, CARRY_SECONDS, fps), None

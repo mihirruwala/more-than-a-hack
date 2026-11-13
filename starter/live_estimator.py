@@ -633,16 +633,20 @@ def _round_point(ball):
     return None if np.isnan(ball).any() else [round(float(ball[0]), 1), round(float(ball[1]), 1)]
 
 
-def export_synthetic_replay(path, start_s=60.0, seconds=90.0, seed=11, lag=25):
-    """Simulate a match, run the estimator over it, and keep `seconds` of it as a replay."""
+def export_synthetic_replay(path, start_s=60.0, seconds=90.0, seed=11, lag=25, goalkeepers=True):
+    """Simulate a match, run the estimator over it, and keep `seconds` of it as a replay.
+
+    Replays are for watching, so the simulated match has goalkeepers by default (slots 0 and 11).
+    """
     from synthetic_match import simulate
 
     first, n = int(start_s * FPS), int(seconds * FPS)
     n_frames = first + n + lag + FPS  # run past the window so the lagged answers exist
-    match = simulate(n_frames, seed=seed)
+    match = simulate(n_frames, seed=seed, goalkeepers=goalkeepers)
     recorder = ReplayRecorder(first, n, match.teams, match.pitch, FPS, lag, "synthetic",
-                              "starter/synthetic_match.py seed={} ({:.0f}-{:.0f} s)".format(
-                                  seed, start_s, start_s + seconds))
+                              "starter/synthetic_match.py seed={}{} ({:.0f}-{:.0f} s)".format(
+                                  seed, ", goalkeepers" if goalkeepers else "",
+                                  start_s, start_s + seconds))
     frames = recorder.frames((t, match.players[t], match.ball[t]) for t in range(n_frames))
     run_blocks(frames, [(1, 0, n_frames - 1)], n_frames, match.teams, match.pitch, lag=lag,
                on_estimate=recorder.estimate)
