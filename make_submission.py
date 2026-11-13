@@ -14,7 +14,8 @@ changing one of those defaults later can't change the submission without anyone 
      each whole half, per-frame evidence raised to POWER. The evidence itself (control radius,
      dead-ball speed term, hidden-ball cap, ...) uses the constants at the top of that module.
   2. starter/postprocess.clean_segments with MIN_SPELL / MAX_GAP
-  3. frames outside both halves are X
+  3. starter/postprocess.lead_restarts with RESTART_LEAD: each restart moved 0.5 s earlier
+  4. frames outside both halves are X
 
 No Smart Tagging, no homography, no video, and nothing read from any ground truth.
 """
@@ -30,19 +31,23 @@ sys.path.insert(0, os.path.join(HERE, "starter"))
 sys.path.insert(0, os.path.join(HERE, "evaluation"))
 
 TEAM_NAME = "Team_MSN"
-POWER = 0.25      # evidence power, chosen on simulated matches
+POWER = 0.15      # evidence power: 0.25 until 2026-11-13, then 0.15 with RESTART_LEAD after
+                  # both helped on Metrica and on 11 simulated matches never used to choose them
+                  # (docs/VALIDATION.md and DESIGN_DECISIONS.md)
 MIN_SPELL = 25    # frames: spells shorter than 1 s are folded into their neighbours
 MAX_GAP = 75      # frames: D/X gaps up to 3 s inside one team's spell are bridged
+RESTART_LEAD = 12 # frames: each restart starts 0.5 s earlier than the model calls it
 
 
 def build_labels(frames, blocks, n_frames, teams, pitch):
     """The submission labels for a stream of (video_frame, players, ball) tracking frames."""
     from live_estimator import run_blocks
-    from postprocess import clean_segments
+    from postprocess import clean_segments, lead_restarts
 
     labels = run_blocks(frames, blocks, n_frames, teams, pitch, offline=True,
                         evidence_power=POWER, prior=None)
-    return clean_segments(labels, blocks, min_spell=MIN_SPELL, max_gap=MAX_GAP)
+    labels = clean_segments(labels, blocks, min_spell=MIN_SPELL, max_gap=MAX_GAP)
+    return lead_restarts(labels, blocks, frames=RESTART_LEAD)
 
 
 def sha256_of(path):

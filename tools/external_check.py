@@ -43,9 +43,10 @@ FPS = 25
 HOME, AWAY = 0, 1
 
 ON_BALL = {"PASS", "SET PIECE", "SHOT", "RECOVERY", "BALL LOST", "BALL OUT"}
-POWERS = (0.1, 0.25, 0.5, 1.0)
+POWERS = (0.1, 0.15, 0.25, 0.5, 1.0)
 CLEANS = ((25, 75), (25, 125), (50, 75), (50, 125))
-SUBMISSION = (0.25, 25, 75)  # make_submission.py: POWER, MIN_SPELL, MAX_GAP
+SUBMISSION = (0.15, 25, 75)  # make_submission.py: POWER, MIN_SPELL, MAX_GAP (plus RESTART_LEAD,
+                             # which this table leaves out; tools/validation_report.py includes it)
 
 
 # -- loading -------------------------------------------------------------------------------------

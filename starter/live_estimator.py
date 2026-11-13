@@ -88,12 +88,13 @@ HIDDEN_CONTROL_CAP = 0.25 # team control from a ball we cannot see is capped at 
 P_SWITCH = 0.004          # per-frame chance possession changes team
 P_TO_DEAD = 0.002         # per-frame chance play stops
 P_FROM_DEAD = 0.004       # per-frame chance play restarts
-EVIDENCE_POWER = 0.25     # each frame's likelihood is raised to this power before the HMM sees
+EVIDENCE_POWER = 0.15     # each frame's likelihood is raised to this power before the HMM sees
                           # it. Consecutive frames are nearly the same observation, so counting
                           # each one as independent evidence overstates it; a power below 1
                           # discounts that, and a team switch then needs evidence that persists.
-                          # 0.25 sits on a plateau on held-out simulated matches (0.15 is no
-                          # better); it was not fitted to the public five minutes.
+                          # 0.25 until 2026-11-13; 0.15 since, on Metrica and held-out
+                          # simulated matches (docs/VALIDATION.md). make_submission.py also sets
+                          # it explicitly. Not fitted to the public five minutes.
 VELOCITY_SPAN = 5         # frames: player velocity is differenced over this many
 MATCH_SPEED = 2.5         # m/s: how far a player's velocity may differ from the ball's and
                           # still count as "moving with it"

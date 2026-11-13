@@ -46,7 +46,7 @@ import external_check as ec                                        # noqa: E402
 import live_estimator as le                                        # noqa: E402
 import possession_metrics as pm                                    # noqa: E402
 from baseline import smooth                                        # noqa: E402
-from postprocess import clean_segments                             # noqa: E402
+from postprocess import clean_segments, lead_restarts              # noqa: E402
 from synthetic_match import simulate                               # noqa: E402
 
 OUT = os.path.join(ROOT, "docs", "VALIDATION.md")
@@ -59,9 +59,9 @@ TOLS = (12, 25, 50, 125)
 
 # The submission, as make_submission.py runs it (see live_estimator for the evidence rule).
 SUBMITTED = {
-    "power": 0.25, "gain": le.DEAD_SPEED_GAIN, "mid": le.DEAD_SPEED_MID, "unseen": 0.4,
+    "power": 0.15, "gain": le.DEAD_SPEED_GAIN, "mid": le.DEAD_SPEED_MID, "unseen": 0.4,
     "cap": le.HIDDEN_CONTROL_CAP, "p_switch": le.P_SWITCH, "p_to_dead": le.P_TO_DEAD,
-    "p_from_dead": le.P_FROM_DEAD, "clean": (25, 75), "mode": "offline",
+    "p_from_dead": le.P_FROM_DEAD, "clean": (25, 75), "lead": 12, "mode": "offline",
 }
 
 
@@ -189,6 +189,8 @@ def run(match, cfg):
         post_all[idx] = post
     if cfg["clean"]:
         labels = clean_segments(labels, match.blocks, *cfg["clean"])
+    if cfg["lead"]:
+        labels = lead_restarts(labels, match.blocks, cfg["lead"])
     return labels, post_all
 
 
@@ -560,8 +562,8 @@ def main():
     print("7. hindsight modes", flush=True)
     modes = (("offline: whole half of hindsight, with cleanup (the submission)", "submitted", sub),
              ("offline, no cleanup", "cleanNone", variant(clean=None)),
-             ("fixed lag: 1 s of hindsight (the site's Console)", "lag25", variant(mode="lag25", clean=None)),
-             ("zero latency: no hindsight", "lag0", variant(mode="lag0", clean=None)))
+             ("fixed lag: 1 s of hindsight (the site's Console)", "lag25", variant(mode="lag25", clean=None, lead=0)),
+             ("zero latency: no hindsight", "lag0", variant(mode="lag0", clean=None, lead=0)))
     rows = []
     for label, key, cfg in modes:
         cells = [label]
@@ -614,7 +616,8 @@ def main():
 
     # 9. sensitivity ----------------------------------------------------------------------------
     print("9. sensitivity", flush=True)
-    sweeps = [("evidence power", "power", (0.15, 0.25, 0.35, 0.5)),
+    sweeps = [("evidence power", "power", (0.1, 0.15, 0.25, 0.35)),
+              ("restart lead (frames)", "lead", (0, 12, 25)),
               ("P(team switch) per frame", "p_switch", (0.002, 0.004, 0.008)),
               ("P(play stops) per frame", "p_to_dead", (0.001, 0.002, 0.004)),
               ("P(restart) per frame", "p_from_dead", (0.002, 0.004, 0.008)),
@@ -684,6 +687,8 @@ def main():
     ablations = [
         ("the submitted pipeline", "submitted", sub, None),
         ("without cleanup", "cleanNone", variant(clean=None), None),
+        ("without the restart lead", "lead=0", variant(lead=0), None),
+        ("as submitted before 2026-11-13 (power 0.25, no restart lead)", "old", variant(power=0.25, lead=0), None),
         ("without the evidence discount (power 1)", "power=1.0", variant(power=1.0), None),
         ("without stickiness (every frame decided alone)", "nosticky",
          variant(p_switch=1 / 3.0, p_to_dead=1 / 3.0, p_from_dead=2 / 3.0), None),

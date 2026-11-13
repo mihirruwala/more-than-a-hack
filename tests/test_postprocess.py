@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(ROOT, "evaluation"))
 
 import possession_metrics as pm  # noqa: E402
 from games import GAME, GAMES, half_video_blocks  # noqa: E402
-from postprocess import clean_segments  # noqa: E402
+from postprocess import RESTART_LEAD, clean_segments, lead_restarts  # noqa: E402
 
 
 def seq(*parts):
@@ -100,6 +100,52 @@ class AbsorbShortSpells(unittest.TestCase):
     def test_head_run_absorbed(self):
         labels = seq(("H", 3), ("A", 100))
         self.assertTrue((clean_segments(labels, whole(labels)) == "A").all())
+
+
+class LeadRestarts(unittest.TestCase):
+
+    def test_restart_moves_earlier_by_the_lead(self):
+        labels = seq(("H", 100), ("D", 80), ("A", 100))
+        out = lead_restarts(labels, whole(labels))
+        self.assertEqual((out == "D").sum(), 80 - RESTART_LEAD)
+        self.assertEqual(out[100 + 80 - RESTART_LEAD], "A")
+        self.assertTrue((out[:100] == "H").all())  # the stoppage still starts where it did
+
+    def test_short_stoppage_goes_to_the_restarting_team(self):
+        labels = seq(("H", 100), ("D", 5), ("A", 100))
+        out = lead_restarts(labels, whole(labels))
+        self.assertEqual("".join(out[100:105]), "AAAAA")
+
+    def test_nothing_else_changes(self):
+        labels = seq(("H", 100), ("A", 50), ("D", 40), ("X", 30), ("D", 40), ("H", 60))
+        out = lead_restarts(labels, whole(labels))
+        changed = np.flatnonzero(out != labels)
+        self.assertEqual(len(changed), RESTART_LEAD)  # only the D before the final restart
+        self.assertTrue((labels[changed] == "D").all() and (out[changed] == "H").all())
+        self.assertEqual("".join(out[150:220]), "D" * 40 + "X" * 30)  # D -> X is not a restart
+
+    def test_never_crosses_a_block(self):
+        labels = seq(("D", 50), ("H", 50))
+        out = lead_restarts(labels, [(1, 0, 49), (2, 50, 99)])
+        self.assertTrue((out == labels).all())
+
+    def test_matches_the_validated_rule_on_random_labels(self):
+        # The rule as tools/validation_report measured it, written the slow way.
+        def reference(labels, frames):
+            out = labels.copy()
+            for t in range(1, len(out)):
+                if out[t - 1] == "D" and out[t] in ("H", "A"):
+                    lo = t
+                    while lo > 0 and t - lo < frames and out[lo - 1] == "D":
+                        lo -= 1
+                    out[lo:t] = out[t]
+            return out
+
+        rng = np.random.RandomState(4)
+        for _ in range(20):
+            parts = [(rng.choice(list("HADX")), int(rng.randint(1, 60))) for _ in range(40)]
+            labels = seq(*parts)
+            self.assertTrue((lead_restarts(labels, whole(labels)) == reference(labels, RESTART_LEAD)).all())
 
 
 class Blocks(unittest.TestCase):

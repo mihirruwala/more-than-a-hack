@@ -40,6 +40,11 @@ from games import GAME, half_video_blocks  # noqa: E402
 # frames with the same team on both sides is bridged.
 MIN_SPELL = 25   # 1 s
 MAX_GAP = 75     # 3 s
+# Frames a restart is moved earlier by lead_restarts: 0.5 s. Our estimate ends a stoppage only
+# once players speed up again, a median 1.3 s after the restart on Metrica and 0.4 s on
+# simulated matches (docs/VALIDATION.md, section 3). Half a second helped on both; a whole
+# second already hurt on simulations.
+RESTART_LEAD = 12
 
 H, A, D, X = 0, 1, 2, 3
 LABELS = np.array(["H", "A", "D", "X"])
@@ -73,6 +78,27 @@ def clean_segments(labels, blocks=None, min_spell=MIN_SPELL, max_gap=MAX_GAP):
         codes[first:last + 1] = np.repeat([code for code, _ in runs],
                                           [length for _, length in runs])
     return LABELS[codes]
+
+
+def lead_restarts(labels, blocks=None, frames=RESTART_LEAD):
+    """A copy of `labels` with every restart moved up to `frames` earlier, per half.
+
+    A restart is a D run followed by a team run. The last `frames` frames of the D run (all of it,
+    if shorter) go to the team that restarts. Nothing else changes, and nothing crosses a block
+    boundary. Run it after clean_segments, which is what we validated.
+    """
+    out = np.array(labels, dtype="<U1").copy()
+    if blocks is None:
+        blocks = half_video_blocks(GAME)
+    for _, first, last in blocks:
+        seg = out[first:last + 1]
+        starts = np.flatnonzero((seg[1:] != "D") & (seg[1:] != "X") & (seg[:-1] == "D")) + 1
+        for t in starts:
+            lo = t
+            while lo > 0 and t - lo < frames and seg[lo - 1] == "D":
+                lo -= 1
+            seg[lo:t] = seg[t]
+    return out
 
 
 def to_codes(labels):

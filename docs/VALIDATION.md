@@ -10,14 +10,14 @@ spellF1 is the ranking metric. The difference column is a paired bootstrap: both
 
 | match | submitted spellF1 | baseline spellF1 | difference | submitted macroF1 | possessions (ours / ref) |
 |---|---|---|---|---|---|
-| Metrica 1 (as tracked) | 0.477 [0.438, 0.520] | 0.418 [0.388, 0.450] | +0.060 [+0.036, +0.083] | 0.771 [0.736, 0.800] | 303 / 376 |
-| Metrica 1 (extra ball dropouts) | 0.438 [0.399, 0.477] | 0.329 [0.302, 0.355] | +0.109 [+0.083, +0.138] | 0.768 [0.733, 0.794] | 306 / 376 |
-| Metrica 2 (as tracked) | 0.471 [0.431, 0.512] | 0.399 [0.366, 0.431] | +0.073 [+0.049, +0.098] | 0.761 [0.724, 0.791] | 319 / 354 |
-| Metrica 2 (extra ball dropouts) | 0.432 [0.395, 0.471] | 0.329 [0.301, 0.357] | +0.103 [+0.074, +0.134] | 0.747 [0.709, 0.777] | 326 / 354 |
-| simulated, seed 201 | 0.663 [0.602, 0.723] | 0.379 [0.325, 0.436] | +0.284 [+0.218, +0.346] | 0.882 [0.853, 0.902] | 104 / 94 |
-| simulated, seed 202 | 0.755 [0.693, 0.809] | 0.425 [0.367, 0.479] | +0.328 [+0.264, +0.391] | 0.900 [0.877, 0.918] | 109 / 111 |
-| simulated, seed 203 | 0.679 [0.598, 0.753] | 0.331 [0.274, 0.388] | +0.347 [+0.282, +0.415] | 0.875 [0.843, 0.899] | 84 / 94 |
-| simulated, seed 204 | 0.745 [0.673, 0.812] | 0.490 [0.436, 0.542] | +0.255 [+0.202, +0.308] | 0.902 [0.878, 0.918] | 91 / 104 |
+| Metrica 1 (as tracked) | 0.474 [0.430, 0.519] | 0.418 [0.388, 0.450] | +0.057 [+0.027, +0.085] | 0.779 [0.744, 0.809] | 255 / 376 |
+| Metrica 1 (extra ball dropouts) | 0.460 [0.418, 0.501] | 0.329 [0.302, 0.355] | +0.131 [+0.101, +0.161] | 0.776 [0.743, 0.803] | 276 / 376 |
+| Metrica 2 (as tracked) | 0.493 [0.450, 0.537] | 0.399 [0.366, 0.431] | +0.094 [+0.064, +0.123] | 0.770 [0.733, 0.801] | 264 / 354 |
+| Metrica 2 (extra ball dropouts) | 0.456 [0.414, 0.496] | 0.329 [0.301, 0.357] | +0.127 [+0.094, +0.161] | 0.757 [0.719, 0.786] | 271 / 354 |
+| simulated, seed 201 | 0.714 [0.649, 0.781] | 0.379 [0.325, 0.436] | +0.335 [+0.262, +0.408] | 0.894 [0.865, 0.914] | 91 / 94 |
+| simulated, seed 202 | 0.759 [0.685, 0.823] | 0.425 [0.367, 0.479] | +0.331 [+0.266, +0.398] | 0.900 [0.878, 0.919] | 95 / 111 |
+| simulated, seed 203 | 0.709 [0.628, 0.786] | 0.331 [0.274, 0.388] | +0.377 [+0.308, +0.447] | 0.879 [0.847, 0.904] | 78 / 94 |
+| simulated, seed 204 | 0.743 [0.664, 0.814] | 0.490 [0.436, 0.542] | +0.252 [+0.193, +0.311] | 0.904 [0.879, 0.920] | 85 / 104 |
 
 ## 2. Post-processing: lighter and heavier cleanup
 
@@ -25,15 +25,15 @@ Mean over each group. 'possessions' is predicted over reference count. The last 
 
 | cleanup (min spell / max gap) | Metrica spellF1 | Metrica transF1@1s | Metrica possessions | sim spellF1 | sim transF1@1s | sim possessions | vs submitted (Metrica) |
 |---|---|---|---|---|---|---|---|
-| none | 0.405 | 0.308 | 1.09 | 0.690 | 0.621 | 1.07 | 0 better, 4 worse |
-| gap bridging only (3 s) | 0.445 | 0.323 | 0.94 | 0.697 | 0.632 | 1.03 | 0 better, 3 worse |
-| short-spell removal only (1 s) | 0.415 | 0.302 | 1.00 | 0.703 | 0.621 | 0.99 | 0 better, 4 worse |
-| lighter: 0.5 s / 1.5 s | 0.433 | 0.319 | 0.97 | 0.701 | 0.626 | 1.03 | 0 better, 3 worse |
-| lighter: 0.5 s / 3 s | 0.454 | 0.324 | 0.89 | 0.702 | 0.632 | 1.02 | 0 better, 0 worse |
-| lighter: 1 s / 1.5 s | 0.435 | 0.314 | 0.94 | 0.708 | 0.627 | 0.97 | 0 better, 3 worse |
-| **submitted: 1 s / 3 s** | 0.455 | 0.319 | 0.86 | 0.710 | 0.634 | 0.96 | 0 better, 0 worse |
-| heavier: 2 s / 3 s | 0.460 | 0.296 | 0.74 | 0.726 | 0.627 | 0.84 | 1 better, 0 worse |
-| heavier: 1 s / 5 s | 0.456 | 0.320 | 0.82 | 0.708 | 0.635 | 0.96 | 1 better, 0 worse |
+| none | 0.442 | 0.337 | 0.85 | 0.718 | 0.644 | 0.92 | 0 better, 4 worse |
+| gap bridging only (3 s) | 0.461 | 0.342 | 0.78 | 0.723 | 0.649 | 0.91 | 0 better, 2 worse |
+| short-spell removal only (1 s) | 0.453 | 0.336 | 0.79 | 0.727 | 0.643 | 0.88 | 0 better, 3 worse |
+| lighter: 0.5 s / 1.5 s | 0.455 | 0.344 | 0.80 | 0.721 | 0.646 | 0.91 | 0 better, 4 worse |
+| lighter: 0.5 s / 3 s | 0.467 | 0.346 | 0.75 | 0.723 | 0.651 | 0.90 | 0 better, 2 worse |
+| lighter: 1 s / 1.5 s | 0.460 | 0.339 | 0.78 | 0.729 | 0.645 | 0.88 | 0 better, 2 worse |
+| **submitted: 1 s / 3 s** | 0.470 | 0.341 | 0.73 | 0.731 | 0.651 | 0.87 | 0 better, 0 worse |
+| heavier: 2 s / 3 s | 0.462 | 0.328 | 0.68 | 0.727 | 0.637 | 0.79 | 0 better, 1 worse |
+| heavier: 1 s / 5 s | 0.467 | 0.344 | 0.69 | 0.730 | 0.653 | 0.87 | 0 better, 0 worse |
 
 ## 3. Transitions
 
@@ -41,41 +41,41 @@ Transition F1 (precision/recall) at four matching tolerances, 0.5 s to 5 s, and 
 
 | match | F1 @0.5 s | F1 @1 s | F1 @2 s | F1 @5 s | median latency (s) | p90 |latency| (s) |
 |---|---|---|---|---|---|---|
-| Metrica 1 (as tracked) | 0.18 (0.19/0.18) | 0.35 (0.36/0.34) | 0.53 (0.54/0.52) | 0.67 (0.68/0.66) | -0.04 | 3.08 |
-| Metrica 1 (extra ball dropouts) | 0.16 (0.16/0.16) | 0.32 (0.32/0.31) | 0.49 (0.49/0.48) | 0.64 (0.65/0.63) | 0.04 | 3.49 |
-| Metrica 2 (as tracked) | 0.20 (0.19/0.20) | 0.33 (0.32/0.34) | 0.53 (0.51/0.55) | 0.67 (0.65/0.69) | 0.08 | 3.00 |
-| Metrica 2 (extra ball dropouts) | 0.16 (0.15/0.16) | 0.28 (0.27/0.29) | 0.48 (0.47/0.50) | 0.64 (0.62/0.66) | 0.20 | 3.14 |
-| simulated, seed 201 | 0.41 (0.40/0.43) | 0.63 (0.60/0.66) | 0.79 (0.75/0.82) | 0.86 (0.82/0.89) | 0.12 | 2.31 |
-| simulated, seed 202 | 0.53 (0.52/0.53) | 0.64 (0.64/0.64) | 0.81 (0.81/0.81) | 0.91 (0.91/0.91) | 0.14 | 2.17 |
-| simulated, seed 203 | 0.34 (0.36/0.33) | 0.61 (0.64/0.58) | 0.76 (0.80/0.72) | 0.84 (0.89/0.80) | 0.16 | 2.08 |
-| simulated, seed 204 | 0.48 (0.51/0.45) | 0.66 (0.70/0.62) | 0.80 (0.85/0.76) | 0.86 (0.91/0.81) | 0.04 | 1.76 |
+| Metrica 1 (as tracked) | 0.19 (0.21/0.17) | 0.34 (0.38/0.32) | 0.51 (0.56/0.47) | 0.64 (0.70/0.59) | -0.12 | 3.12 |
+| Metrica 1 (extra ball dropouts) | 0.19 (0.20/0.17) | 0.34 (0.36/0.32) | 0.48 (0.51/0.45) | 0.64 (0.68/0.60) | -0.04 | 3.48 |
+| Metrica 2 (as tracked) | 0.19 (0.19/0.18) | 0.36 (0.38/0.34) | 0.54 (0.57/0.51) | 0.66 (0.69/0.63) | 0.12 | 2.83 |
+| Metrica 2 (extra ball dropouts) | 0.17 (0.18/0.17) | 0.32 (0.33/0.30) | 0.50 (0.52/0.48) | 0.63 (0.66/0.60) | 0.16 | 2.99 |
+| simulated, seed 201 | 0.43 (0.43/0.42) | 0.66 (0.67/0.65) | 0.81 (0.82/0.80) | 0.89 (0.90/0.88) | 0.06 | 1.84 |
+| simulated, seed 202 | 0.49 (0.52/0.46) | 0.67 (0.71/0.64) | 0.82 (0.87/0.78) | 0.91 (0.97/0.86) | 0.04 | 2.08 |
+| simulated, seed 203 | 0.40 (0.44/0.37) | 0.64 (0.70/0.59) | 0.77 (0.84/0.71) | 0.86 (0.94/0.80) | 0.00 | 2.29 |
+| simulated, seed 204 | 0.50 (0.55/0.46) | 0.64 (0.70/0.58) | 0.79 (0.86/0.72) | 0.84 (0.93/0.77) | -0.04 | 1.76 |
 
 Reference transitions found within 1 s, by kind, and spurious predicted ones of each kind:
 
 | group | kind | found within 1 s | spurious |
 |---|---|---|---|
-| Metrica (4 runs) | turnover | 377/1132 (33%) | 368 |
-| Metrica (4 runs) | into dead ball | 136/328 (41%) | 427 |
-| Metrica (4 runs) | restart | 61/326 (19%) | 445 |
-| held-out simulations (4) | turnover | 151/271 (56%) | 110 |
-| held-out simulations (4) | into dead ball | 93/128 (73%) | 34 |
-| held-out simulations (4) | restart | 85/128 (66%) | 38 |
+| Metrica (4 runs) | turnover | 343/1132 (30%) | 238 |
+| Metrica (4 runs) | into dead ball | 140/328 (43%) | 382 |
+| Metrica (4 runs) | restart | 92/326 (28%) | 390 |
+| held-out simulations (4) | turnover | 142/271 (52%) | 84 |
+| held-out simulations (4) | into dead ball | 93/128 (73%) | 29 |
+| held-out simulations (4) | restart | 89/128 (70%) | 30 |
 
 Timing of the transitions matched within 5 s, by kind (seconds, prediction minus reference; positive means late):
 
 | group | kind | matched | median | more than 0.5 s late | more than 0.5 s early | p90 |latency| |
 |---|---|---|---|---|---|---|
-| Metrica (4 runs) | turnover | 666 | -0.24 | 30% | 42% | 3.18 |
-| Metrica (4 runs) | into dead ball | 261 | -0.04 | 41% | 27% | 3.40 |
-| Metrica (4 runs) | restart | 249 | +1.32 | 74% | 17% | 3.37 |
-| held-out simulations (4) | turnover | 218 | +0.12 | 26% | 22% | 2.73 |
-| held-out simulations (4) | into dead ball | 119 | -0.04 | 29% | 12% | 1.49 |
-| held-out simulations (4) | restart | 114 | +0.40 | 47% | 15% | 1.40 |
+| Metrica (4 runs) | turnover | 577 | -0.32 | 27% | 44% | 3.18 |
+| Metrica (4 runs) | into dead ball | 261 | -0.08 | 39% | 28% | 3.12 |
+| Metrica (4 runs) | restart | 245 | +0.92 | 68% | 19% | 2.96 |
+| held-out simulations (4) | turnover | 206 | +0.08 | 29% | 23% | 2.76 |
+| held-out simulations (4) | into dead ball | 119 | -0.12 | 29% | 13% | 1.48 |
+| held-out simulations (4) | restart | 111 | -0.04 | 22% | 28% | 1.36 |
 
 | group | transF1 @1 s, submitted | same, no cleanup | submitted @5 s |
 |---|---|---|---|
-| Metrica (4 runs) | 0.32 | 0.31 | 0.65 |
-| held-out simulations (4) | 0.63 | 0.62 | 0.87 |
+| Metrica (4 runs) | 0.34 | 0.34 | 0.64 |
+| held-out simulations (4) | 0.65 | 0.64 | 0.88 |
 
 ## 4. Dead ball
 
@@ -83,14 +83,14 @@ Frame-level precision and recall of D. A false stoppage is a predicted dead-ball
 
 | match | D precision | D recall | D F1 | false stoppages /90 | their mean length (s) | stoppages missed entirely | found: under 5 s | found: 5-15 s | found: 15 s+ |
 |---|---|---|---|---|---|---|---|---|---|
-| Metrica 1 (as tracked) | 0.78 | 0.84 | 0.81 | 45.6 | 7.6 | 6/83 | 4/8 | 17/23 | 48/52 |
-| Metrica 1 (extra ball dropouts) | 0.78 | 0.87 | 0.82 | 51.2 | 7.3 | 6/83 | 3/8 | 17/23 | 51/52 |
-| Metrica 2 (as tracked) | 0.72 | 0.83 | 0.77 | 46.9 | 9.1 | 3/82 | 6/11 | 26/32 | 37/39 |
-| Metrica 2 (extra ball dropouts) | 0.72 | 0.83 | 0.77 | 48.8 | 9.4 | 7/82 | 3/11 | 26/32 | 37/39 |
-| simulated, seed 201 | 0.93 | 0.91 | 0.92 | 9.0 | 2.1 | 1/30 | 0/0 | 20/22 | 8/8 |
-| simulated, seed 202 | 0.92 | 0.95 | 0.94 | 13.5 | 2.0 | 0/30 | 0/0 | 23/23 | 7/7 |
-| simulated, seed 203 | 0.92 | 0.93 | 0.93 | 0.0 | 0.0 | 0/39 | 0/0 | 33/33 | 5/6 |
-| simulated, seed 204 | 0.92 | 0.96 | 0.94 | 4.5 | 4.2 | 0/29 | 0/0 | 21/21 | 8/8 |
+| Metrica 1 (as tracked) | 0.79 | 0.84 | 0.81 | 34.4 | 8.7 | 4/83 | 4/8 | 17/23 | 48/52 |
+| Metrica 1 (extra ball dropouts) | 0.79 | 0.87 | 0.83 | 39.1 | 8.0 | 5/83 | 4/8 | 17/23 | 50/52 |
+| Metrica 2 (as tracked) | 0.73 | 0.83 | 0.77 | 34.4 | 11.9 | 4/82 | 6/11 | 25/32 | 37/39 |
+| Metrica 2 (extra ball dropouts) | 0.73 | 0.83 | 0.78 | 40.2 | 11.0 | 7/82 | 4/11 | 26/32 | 37/39 |
+| simulated, seed 201 | 0.95 | 0.90 | 0.92 | 4.5 | 1.9 | 1/30 | 0/0 | 21/22 | 8/8 |
+| simulated, seed 202 | 0.95 | 0.93 | 0.94 | 4.5 | 2.4 | 0/30 | 0/0 | 23/23 | 7/7 |
+| simulated, seed 203 | 0.94 | 0.92 | 0.93 | 0.0 | 0.0 | 0/39 | 0/0 | 33/33 | 5/6 |
+| simulated, seed 204 | 0.94 | 0.96 | 0.95 | 4.5 | 3.6 | 0/29 | 0/0 | 21/21 | 8/8 |
 
 ## 5. Short possessions and quick restarts
 
@@ -98,8 +98,8 @@ Reference possessions matched at IoU 0.5, by length. Quick restarts are the 'und
 
 | group | 0-2 s | 2-5 s | 5-10 s | 10-20 s | 20-40 s | 40+ s |
 |---|---|---|---|---|---|---|
-| Metrica (4 runs) | 24/388 (6%) | 96/366 (26%) | 147/238 (62%) | 211/254 (83%) | 100/138 (72%) | 45/76 (59%) |
-| held-out simulations (4) | 13/44 (30%) | 72/127 (57%) | 96/117 (82%) | 83/88 (94%) | 24/25 (96%) | 2/2 (100%) |
+| Metrica (4 runs) | 17/388 (4%) | 85/366 (23%) | 148/238 (62%) | 211/254 (83%) | 97/138 (70%) | 44/76 (58%) |
+| held-out simulations (4) | 8/44 (18%) | 72/127 (57%) | 94/117 (80%) | 84/88 (95%) | 25/25 (100%) | 2/2 (100%) |
 
 ## 6. Possession durations
 
@@ -108,10 +108,10 @@ Possession lengths in seconds, pooled over each group: count, percentiles, then 
 | group | labels | n | p10 | p25 | median | p75 | p90 | 0-2 s | 2-5 s | 5-10 s | 10-20 s | 20-40 s | 40+ s |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Metrica (4 runs) | reference | 1460 | 0.8 | 1.9 | 4.7 | 14.0 | 26.4 | 388 | 366 | 238 | 254 | 138 | 76 |
-| Metrica (4 runs) | submitted | 1254 | 2.0 | 3.8 | 7.6 | 14.4 | 23.7 | 120 | 306 | 330 | 328 | 131 | 39 |
+| Metrica (4 runs) | submitted | 1066 | 2.8 | 5.1 | 9.5 | 17.3 | 27.9 | 46 | 211 | 304 | 311 | 146 | 48 |
 | Metrica (4 runs) | baseline | 2057 | 0.4 | 1.0 | 4.1 | 9.3 | 18.3 | 771 | 413 | 396 | 301 | 133 | 43 |
 | held-out simulations (4) | reference | 403 | 1.9 | 3.2 | 6.1 | 10.7 | 16.8 | 44 | 127 | 117 | 88 | 25 | 2 |
-| held-out simulations (4) | submitted | 388 | 2.0 | 3.2 | 5.9 | 12.2 | 17.6 | 36 | 125 | 100 | 104 | 22 | 1 |
+| held-out simulations (4) | submitted | 349 | 2.5 | 3.8 | 7.1 | 13.4 | 18.9 | 17 | 106 | 95 | 102 | 28 | 1 |
 | held-out simulations (4) | baseline | 579 | 0.4 | 1.7 | 5.1 | 11.5 | 18.7 | 161 | 125 | 120 | 122 | 47 | 4 |
 
 ## 7. Offline, fixed-lag and zero-latency
@@ -120,10 +120,10 @@ The same evidence and model, answering with different amounts of hindsight. Only
 
 | mode | Metrica spellF1 | Metrica macroF1 | Metrica transF1@1s | Metrica possessions | sim spellF1 | sim macroF1 | sim transF1@1s | sim possessions |
 |---|---|---|---|---|---|---|---|---|
-| offline: whole half of hindsight, with cleanup (the submission) | 0.455 | 0.762 | 0.32 | 0.86 | 0.710 | 0.890 | 0.63 | 0.96 |
-| offline, no cleanup | 0.405 | 0.754 | 0.31 | 1.09 | 0.690 | 0.887 | 0.62 | 1.07 |
-| fixed lag: 1 s of hindsight (the site's Console) | 0.247 | 0.747 | 0.24 | 2.41 | 0.588 | 0.876 | 0.55 | 1.40 |
-| zero latency: no hindsight | 0.298 | 0.736 | 0.28 | 1.73 | 0.385 | 0.823 | 0.37 | 1.84 |
+| offline: whole half of hindsight, with cleanup (the submission) | 0.470 | 0.771 | 0.34 | 0.73 | 0.731 | 0.894 | 0.65 | 0.87 |
+| offline, no cleanup | 0.442 | 0.768 | 0.34 | 0.85 | 0.718 | 0.893 | 0.64 | 0.92 |
+| fixed lag: 1 s of hindsight (the site's Console) | 0.293 | 0.755 | 0.26 | 1.95 | 0.620 | 0.867 | 0.54 | 1.17 |
+| zero latency: no hindsight | 0.322 | 0.739 | 0.28 | 1.44 | 0.457 | 0.813 | 0.34 | 1.38 |
 
 ## 8. Calibration
 
@@ -131,12 +131,12 @@ For frames whose top posterior falls in each band, how often that call matches t
 
 | mode | matches | 0%-60% | 60%-80% | 80%-90% | 90%-95% | 95%-99% | 99%-100% | ECE |
 |---|---|---|---|---|---|---|---|---|
-| offline, no cleanup | Metrica (4 runs) | 36% right (6% of frames) | 44% right (7% of frames) | 54% right (5% of frames) | 58% right (4% of frames) | 71% right (9% of frames) | 85% right (69% of frames) | 0.182 |
-| offline, no cleanup | held-out simulations (4) | 51% right (4% of frames) | 62% right (8% of frames) | 74% right (6% of frames) | 81% right (5% of frames) | 87% right (14% of frames) | 97% right (64% of frames) | 0.056 |
-| fixed lag | Metrica (4 runs) | 32% right (6% of frames) | 45% right (7% of frames) | 56% right (5% of frames) | 64% right (5% of frames) | 72% right (10% of frames) | 85% right (67% of frames) | 0.186 |
-| fixed lag | held-out simulations (4) | 54% right (4% of frames) | 64% right (8% of frames) | 73% right (7% of frames) | 81% right (7% of frames) | 86% right (13% of frames) | 96% right (61% of frames) | 0.063 |
-| zero latency | Metrica (4 runs) | 33% right (7% of frames) | 49% right (9% of frames) | 64% right (9% of frames) | 73% right (9% of frames) | 77% right (36% of frames) | 89% right (30% of frames) | 0.175 |
-| zero latency | held-out simulations (4) | 52% right (6% of frames) | 61% right (11% of frames) | 72% right (12% of frames) | 79% right (12% of frames) | 87% right (37% of frames) | 99% right (22% of frames) | 0.083 |
+| offline, no cleanup | Metrica (4 runs) | 38% right (6% of frames) | 50% right (8% of frames) | 58% right (6% of frames) | 65% right (5% of frames) | 77% right (11% of frames) | 87% right (64% of frames) | 0.160 |
+| offline, no cleanup | held-out simulations (4) | 56% right (5% of frames) | 66% right (9% of frames) | 78% right (7% of frames) | 84% right (6% of frames) | 91% right (17% of frames) | 98% right (56% of frames) | 0.040 |
+| fixed lag | Metrica (4 runs) | 33% right (7% of frames) | 49% right (9% of frames) | 62% right (6% of frames) | 71% right (6% of frames) | 77% right (12% of frames) | 86% right (60% of frames) | 0.167 |
+| fixed lag | held-out simulations (4) | 52% right (5% of frames) | 60% right (9% of frames) | 75% right (9% of frames) | 82% right (8% of frames) | 89% right (18% of frames) | 97% right (51% of frames) | 0.058 |
+| zero latency | Metrica (4 runs) | 34% right (8% of frames) | 52% right (11% of frames) | 70% right (11% of frames) | 77% right (11% of frames) | 85% right (56% of frames) | 70% right (3% of frames) | 0.152 |
+| zero latency | held-out simulations (4) | 51% right (7% of frames) | 60% right (13% of frames) | 74% right (15% of frames) | 82% right (15% of frames) | 90% right (35% of frames) | 100% right (14% of frames) | 0.075 |
 
 ## 9. Parameter sensitivity
 
@@ -144,29 +144,32 @@ One setting at a time, everything else as submitted. spellF1, mean over each gro
 
 | setting | value | Metrica spellF1 | sim spellF1 |
 |---|---|---|---|
-| evidence power | 0.15 | 0.468 (+0.014) | 0.725 (+0.015) |
-| evidence power | 0.25 (submitted) | 0.455 (+0.000) | 0.710 (+0.000) |
-| evidence power | 0.35 | 0.454 (-0.000) | 0.702 (-0.008) |
-| evidence power | 0.5 | 0.450 (-0.005) | 0.683 (-0.027) |
-| P(team switch) per frame | 0.002 | 0.461 (+0.006) | 0.715 (+0.005) |
-| P(team switch) per frame | 0.004 (submitted) | 0.455 (+0.000) | 0.710 (+0.000) |
-| P(team switch) per frame | 0.008 | 0.461 (+0.007) | 0.701 (-0.009) |
-| P(play stops) per frame | 0.001 | 0.455 (+0.001) | 0.710 (+0.000) |
-| P(play stops) per frame | 0.002 (submitted) | 0.455 (+0.000) | 0.710 (+0.000) |
-| P(play stops) per frame | 0.004 | 0.454 (-0.001) | 0.716 (+0.005) |
-| P(restart) per frame | 0.002 | 0.457 (+0.002) | 0.711 (+0.001) |
-| P(restart) per frame | 0.004 (submitted) | 0.455 (+0.000) | 0.710 (+0.000) |
-| P(restart) per frame | 0.008 | 0.453 (-0.001) | 0.713 (+0.003) |
-| dead-ball speed midpoint (m/s) | 1.5 | 0.450 (-0.005) | 0.678 (-0.032) |
-| dead-ball speed midpoint (m/s) | 2.0 (submitted) | 0.455 (+0.000) | 0.710 (+0.000) |
-| dead-ball speed midpoint (m/s) | 2.5 | 0.411 (-0.044) | 0.666 (-0.044) |
-| dead-ball speed gain | 0.5 | 0.454 (-0.001) | 0.654 (-0.056) |
-| dead-ball speed gain | 1.0 (submitted) | 0.455 (+0.000) | 0.710 (+0.000) |
-| dead-ball speed gain | 2.0 | 0.420 (-0.035) | 0.680 (-0.030) |
-| hidden-ball control cap | 0.1 | 0.459 (+0.004) | 0.699 (-0.012) |
-| hidden-ball control cap | 0.25 (submitted) | 0.455 (+0.000) | 0.710 (+0.000) |
-| hidden-ball control cap | 0.5 | 0.446 (-0.009) | 0.710 (+0.000) |
-| hidden-ball control cap | None | 0.428 (-0.027) | 0.710 (+0.000) |
+| evidence power | 0.1 | 0.460 (-0.010) | 0.717 (-0.014) |
+| evidence power | 0.15 (submitted) | 0.470 (+0.000) | 0.731 (+0.000) |
+| evidence power | 0.25 | 0.458 (-0.013) | 0.718 (-0.013) |
+| evidence power | 0.35 | 0.460 (-0.011) | 0.715 (-0.016) |
+| restart lead (frames) | 0 | 0.468 (-0.002) | 0.725 (-0.006) |
+| restart lead (frames) | 12 (submitted) | 0.470 (+0.000) | 0.731 (+0.000) |
+| restart lead (frames) | 25 | 0.470 (-0.000) | 0.728 (-0.004) |
+| P(team switch) per frame | 0.002 | 0.459 (-0.012) | 0.726 (-0.006) |
+| P(team switch) per frame | 0.004 (submitted) | 0.470 (+0.000) | 0.731 (+0.000) |
+| P(team switch) per frame | 0.008 | 0.465 (-0.005) | 0.715 (-0.016) |
+| P(play stops) per frame | 0.001 | 0.471 (+0.000) | 0.730 (-0.001) |
+| P(play stops) per frame | 0.002 (submitted) | 0.470 (+0.000) | 0.731 (+0.000) |
+| P(play stops) per frame | 0.004 | 0.466 (-0.004) | 0.733 (+0.002) |
+| P(restart) per frame | 0.002 | 0.470 (-0.000) | 0.729 (-0.002) |
+| P(restart) per frame | 0.004 (submitted) | 0.470 (+0.000) | 0.731 (+0.000) |
+| P(restart) per frame | 0.008 | 0.469 (-0.002) | 0.733 (+0.001) |
+| dead-ball speed midpoint (m/s) | 1.5 | 0.463 (-0.008) | 0.687 (-0.044) |
+| dead-ball speed midpoint (m/s) | 2.0 (submitted) | 0.470 (+0.000) | 0.731 (+0.000) |
+| dead-ball speed midpoint (m/s) | 2.5 | 0.446 (-0.024) | 0.702 (-0.029) |
+| dead-ball speed gain | 0.5 | 0.467 (-0.004) | 0.671 (-0.060) |
+| dead-ball speed gain | 1.0 (submitted) | 0.470 (+0.000) | 0.731 (+0.000) |
+| dead-ball speed gain | 2.0 | 0.453 (-0.018) | 0.708 (-0.023) |
+| hidden-ball control cap | 0.1 | 0.474 (+0.003) | 0.726 (-0.005) |
+| hidden-ball control cap | 0.25 (submitted) | 0.470 (+0.000) | 0.731 (+0.000) |
+| hidden-ball control cap | 0.5 | 0.455 (-0.016) | 0.731 (+0.000) |
+| hidden-ball control cap | None | 0.431 (-0.039) | 0.731 (+0.000) |
 
 ## 10. The ball filter: hidden balls and reacquisition
 
@@ -200,12 +203,14 @@ Each part of the pipeline taken away in turn, everything else as submitted. Mean
 
 | pipeline | Metrica spellF1 | Metrica macroF1 | Metrica possessions | sim spellF1 | sim macroF1 | sim possessions |
 |---|---|---|---|---|---|---|
-| the submitted pipeline | 0.455 | 0.762 | 0.86 | 0.710 | 0.890 | 0.96 |
-| without cleanup | 0.405 | 0.754 | 1.09 | 0.690 | 0.887 | 1.07 |
-| without the evidence discount (power 1) | 0.428 | 0.754 | 1.10 | 0.655 | 0.868 | 1.15 |
-| without stickiness (every frame decided alone) | 0.388 | 0.751 | 1.28 | 0.456 | 0.763 | 1.32 |
-| without the player-speed stoppage term | 0.432 | 0.730 | 0.90 | 0.600 | 0.783 | 0.96 |
-| without the hidden-ball control cap | 0.428 | 0.711 | 0.88 | 0.710 | 0.890 | 0.96 |
-| without velocity matching | 0.452 | 0.767 | 0.95 | 0.645 | 0.875 | 1.05 |
+| the submitted pipeline | 0.470 | 0.771 | 0.73 | 0.731 | 0.894 | 0.87 |
+| without cleanup | 0.442 | 0.768 | 0.85 | 0.718 | 0.893 | 0.92 |
+| without the restart lead | 0.468 | 0.767 | 0.73 | 0.725 | 0.892 | 0.87 |
+| as submitted before 2026-11-13 (power 0.25, no restart lead) | 0.455 | 0.762 | 0.86 | 0.710 | 0.890 | 0.96 |
+| without the evidence discount (power 1) | 0.434 | 0.757 | 1.10 | 0.665 | 0.871 | 1.15 |
+| without stickiness (every frame decided alone) | 0.395 | 0.751 | 1.26 | 0.467 | 0.763 | 1.31 |
+| without the player-speed stoppage term | 0.428 | 0.721 | 0.74 | 0.615 | 0.778 | 0.85 |
+| without the hidden-ball control cap | 0.431 | 0.710 | 0.75 | 0.731 | 0.894 | 0.87 |
+| without velocity matching | 0.467 | 0.774 | 0.82 | 0.679 | 0.881 | 0.91 |
 | nearest-player baseline (published floor) | 0.369 | 0.759 | 1.41 | 0.406 | 0.495 | 1.44 |
 

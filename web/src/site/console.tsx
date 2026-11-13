@@ -1163,9 +1163,9 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
               <li>Tracking slots are tracklets, so the numbers on players are slot numbers, not shirt numbers.</li>
               <li>The stoppage detector uses 0.2 s speeds, like the estimator. Speeds shown for players are over 1 s, which hides tracking jitter.</li>
               <li>
-                The same model can answer in three ways. <b>Offline</b>, with the whole half of hindsight, is the submission: spellF1 0.46 on two open Metrica
-                matches and 0.71 on simulated ones. <b>Fixed lag</b>, {(replay.lag / replay.fps).toFixed(1)} s late, is this page: 0.25 and 0.59, because a second of
-                hindsight still lets a short burst of evidence flip the call. <b>Zero latency</b>, with no hindsight, scores 0.30 and 0.39. Our validation report has
+                The same model can answer in three ways. <b>Offline</b>, with the whole half of hindsight, is the submission: spellF1 0.47 on two open Metrica
+                matches and 0.73 on simulated ones. <b>Fixed lag</b>, {(replay.lag / replay.fps).toFixed(1)} s late, is this page: 0.29 and 0.62, because a second of
+                hindsight still lets a short burst of evidence flip the call. <b>Zero latency</b>, with no hindsight, scores 0.32 and 0.46. Our validation report has
                 the details.
               </li>
             </ul>
@@ -1553,8 +1553,8 @@ function ConfidencePanel({ replay, a, view }: { replay: Replay; a: Analytics; vi
         <strong>{Math.round(agreement !== null ? agreement * 100 : mean)}%</strong>
       </div>
       <p className={s.note}>
-        Confidence is the model's own posterior, not a calibrated probability. In this fixed-lag mode, calls made at 99% or more were right 85% of the time on Metrica's
-        matches and 96% on simulated ones.
+        Confidence is the model's own posterior, not a calibrated probability. In this fixed-lag mode, calls made at 99% or more were right 86% of the time on Metrica's
+        matches and 97% on simulated ones.
       </p>
       {replay.truth && <p className={s.note}>Truth is the simulator's record of an invented match. It checks the design, not the leaderboard.</p>}
     </Card>
