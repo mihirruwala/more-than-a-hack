@@ -16,10 +16,11 @@ flowchart LR
     D --> F
     E --> F
     C -- yes --> F["per-frame evidence<br/>home · away · dead"]
-    F --> G["evidence power 0.25<br/>(frames are not independent)"]
+    F --> G["evidence power 0.15<br/>(frames are not independent)"]
     G --> H["sticky 3-state HMM<br/>forward-backward per half"]
     H --> I["cleanup<br/>bridge gaps ≤ 3 s, absorb spells < 1 s"]
-    I --> J["Team_MSN.csv"]
+    I --> K["restarts 0.5 s earlier"]
+    K --> J["Team_MSN.csv"]
 ```
 
 Team evidence is closeness to the ball times how well a player's velocity matches the ball's.
@@ -66,8 +67,8 @@ their velocity matches the ball's. The test only applies while the ball is seen,
 hidden ball's velocity is our own guess.
 
 We believed this was the most important factor in the model, and the ablation (below) only
-half supports that. On held-out simulations, removing it costs 0.065 spellF1. On Metrica's two
-matches it makes almost no difference (0.452 without it, 0.455 with). The simulator stages a
+half supports that. On held-out simulations, removing it costs 0.052 spellF1. On Metrica's two
+matches it makes almost no difference (0.467 without it, 0.470 with). The simulator stages a
 pressing defender next to every carrier, real matches less often. We kept it because it fixes
 the failure it was built for and costs nothing on real football, but we no longer claim it is
 the model's main ingredient. The sticky model and the cleanup matter more.
@@ -83,8 +84,9 @@ possession as something that lasts.
 Stickiness alone wasn't enough. Our first version predicted 36 possessions in the public window,
 which has 17. Consecutive frames are nearly the same observation, and multiplying 25 of them
 together as independent evidence lets one defender standing close for a second flip the state.
-Raising each frame's evidence to the power 0.25 discounts that. We chose the power on simulated
-matches, and it was confirmed on Metrica later.
+Raising each frame's evidence to a power below 1 discounts that. We chose 0.25 on simulated
+matches and confirmed it on Metrica. The validation report later found 0.15 slightly better on
+both, and we switched (see "A late change" below).
 
 The model is not fragile to its rates. Halving or doubling the switch, stop or restart
 probability moves Metrica spellF1 by less than 0.01, which is well inside the noise band
@@ -107,13 +109,26 @@ between spells of the same team. Both are football priors: a real possession las
 a second, and a ball unseen for under three seconds is almost always an occlusion. We didn't fit
 them, and then we tested them against lighter and heavier versions (report section 2):
 
-- **Without cleanup**, Metrica spellF1 drops from 0.455 to 0.405, and the paired interval
+- **Without cleanup**, Metrica spellF1 drops from 0.470 to 0.442, and the paired interval
   excludes zero on all four Metrica runs.
 - **Lighter cleanup** (0.5 s / 1.5 s, or either repair on its own) is never better, and is
-  significantly worse on three of four runs. 0.5 s / 3 s ties with the submission.
-- **Heavier cleanup** (2 s / 3 s) scores slightly higher on Metrica (0.460) and on the held-out
-  simulations (0.726), but it is significant on only one of the four Metrica runs. It predicts
-  only 0.74 possessions per reference possession and lowers transition F1. We kept 1 s / 3 s.
+  significantly worse on two to four of the four runs.
+- **Heavier cleanup** (2 s / 3 s, or 1 s / 5 s) is no better either. We kept 1 s / 3 s.
+
+## A late change, and how we checked it
+
+The validation report showed restarts placed a median 1.3 s late on Metrica, and a sweep
+suggested evidence power 0.15 over 0.25. Starting restarts 0.5 s earlier and using power 0.15
+added 0.016 spellF1 on Metrica and 0.021 on four new simulated matches. A full second of lead
+already hurt on simulations, so we stopped at half a second.
+
+We found both changes by looking at those same matches, which flatters any choice. Before
+adopting them, we ran eleven more simulated matches that played no part in finding them (seeds
+101-103 and 301-308, two of them with goalkeepers). There the change added 0.011 spellF1 on
+average, was better on 9 of 11 and significantly worse on none, and macroF1 rose on 10 of 11.
+That is below the 0.04 noise band of a single match, so we expect a small gain, not a decisive
+one. Scored once afterwards on the public window, spellF1 went from 0.491 to 0.503, macroF1 from
+0.823 to 0.833 and transition F1 from 0.18 to 0.24, with 18 possessions against 17.
 
 ## Ablations
 
@@ -122,13 +137,15 @@ over the four Metrica runs and the four held-out simulations:
 
 | pipeline | Metrica | simulations |
 |---|---|---|
-| **submitted** | **0.455** | **0.710** |
-| without stickiness (every frame decided alone) | 0.388 | 0.456 |
-| without cleanup | 0.405 | 0.690 |
-| without the evidence discount (power 1) | 0.428 | 0.655 |
-| without the hidden-ball control cap | 0.428 | 0.710 |
-| without the player-speed stoppage term | 0.432 | 0.600 |
-| without velocity matching | 0.452 | 0.645 |
+| **submitted** | **0.470** | **0.731** |
+| without stickiness (every frame decided alone) | 0.395 | 0.467 |
+| without the player-speed stoppage term | 0.428 | 0.615 |
+| without the hidden-ball control cap | 0.431 | 0.731 |
+| without the evidence discount (power 1) | 0.434 | 0.665 |
+| without cleanup | 0.442 | 0.718 |
+| without velocity matching | 0.467 | 0.679 |
+| without the restart lead | 0.468 | 0.725 |
+| as submitted until 13 November (power 0.25, no lead) | 0.455 | 0.710 |
 | nearest-player baseline | 0.369 | 0.406 |
 
 The hidden-ball cap doesn't matter on simulations, which lose the ball at random, but it does
@@ -146,29 +163,28 @@ on Metrica, where the ball is missing in real play. That matches why we added it
 | Smart Tagging nudges | helped only with tags right ~80% of the time; real ones were 68% right | section above |
 | the broadcast ATD | on a different timeline from the submission (164,488 vs 199,319 frames) | TECHNICAL.md |
 | answering live with zero lag after the dead-ball change | more fragmented on simulations (spellF1 0.485 to 0.411); the submission is offline, so we kept the change | TECHNICAL.md |
-| answering with 1 s of hindsight | more fragmented than zero lag on Metrica (2.4 against 1.7 possessions per reference one): a second of hindsight lets a short burst of evidence flip the call | report section 7 |
+| answering with 1 s of hindsight | more fragmented than zero lag on Metrica (2.0 against 1.4 possessions per reference one): a second of hindsight lets a short burst of evidence flip the call | report section 7 |
 
 ## Known failure cases
 
 These are measured, not guessed (report sections 3-8):
 
 - **Transitions are found but not placed precisely.** The scoreboard's transition F1 (1 s
-  tolerance) is 0.18 on the public window and 0.28-0.35 on Metrica. At 5 s it is 0.64-0.67, so
-  most changes are found, just not to the second. Turnovers and stoppages have a median timing
-  error near zero. Restarts are late, a median 1.3 s on Metrica, because the model waits for
-  players to speed up after the restart. Moving each restart 0.5 s earlier in the cleanup helps
-  on both Metrica and the held-out simulations, but by less than the noise band, so we haven't
-  changed the submission for it.
-- **Short possessions are mostly lost.** Of Metrica's reference possessions under 2 s, 6% are
-  matched (30% on simulations). The sticky model and the 1 s cleanup both trade them away for
+  tolerance) is 0.24 on the public window (0.18 before 13 November) and 0.32-0.36 on Metrica. At 5 s it is
+  0.63-0.66, so most changes are found, just not to the second. Turnovers and stoppages have a
+  median timing error near zero. Restarts were the late ones, because the model waits for
+  players to speed up after the restart. Starting them 0.5 s earlier moved the median from
+  1.3 s late to 0.9 s on Metrica, and to zero on simulations.
+- **Short possessions are mostly lost.** Of Metrica's reference possessions under 2 s, 4% are
+  matched (18% on simulations). The sticky model and the 1 s cleanup both trade them away for
   fewer invented ones. Part of this is the reference itself: event-built labels contain many
   one-touch spells.
 - **Stoppages where players keep moving are missed, and slow spells of open play are called
-  dead.** Dead-ball recall is 0.83-0.87 and precision 0.72-0.78 on Metrica, with about 46-51
-  false stoppages per 90 minutes, averaging 7-9 s. Quick restarts under 5 s are found about
+  dead.** Dead-ball recall is 0.83-0.87 and precision 0.73-0.79 on Metrica, with about 34-40
+  false stoppages per 90 minutes, averaging 8-12 s. Quick restarts under 5 s are found about
   half the time.
 - **Confidence is not a probability.** Frames the offline model calls at 99% or more are right
-  85% of the time on Metrica and 97% on simulations (calibration error 0.18 and 0.06). Part of
+  87% of the time on Metrica and 98% on simulations (calibration error 0.16 and 0.04). Part of
   the Metrica gap is the approximate reference.
 - **The ball filter is too sure of itself on long gaps.** It locks back on almost at once when
   the ball reappears (within 2 frames 98-99% of the time). But after 2 s unseen, only 35-47% of
@@ -183,9 +199,9 @@ These are measured, not guessed (report sections 3-8):
 ## Keeping it honest and reproducible
 
 - The submission is deterministic. `make_submission.py` writes out every setting it uses, runs
-  the official validator and prints the file's SHA-256 (`42cc1f8a…aeb9e`). Since that hash was
-  recorded, only comments and docstrings have changed on the submission path.
-- `python3 -m unittest discover -s tests` runs 63 tests that need no match data, including
+  the official validator and prints the file's SHA-256 (`7e4134a1…6653`). The version submitted
+  until 13 November gave `42cc1f8a…aeb9e`.
+- `python3 -m unittest discover -s tests` runs 68 tests that need no match data, including
   checks that the simulator's default output never moves and that the ball filter recovers from
   long gaps. `cd web && npm test` covers the web code.
 - Every setting was chosen on simulated matches or on Metrica's open data. The public five

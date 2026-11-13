@@ -15,7 +15,7 @@ submission reads only the tactical ATD files.
 
 We chose the settings away from the competition game, on simulated matches and on two real
 matches from Metrica Sports' open sample data, with labels rebuilt from their event logs. On
-those two matches the submitted pipeline scores spellF1 0.474, or 0.435 when we hide the ball
+those two matches the submitted pipeline scores spellF1 0.484, or 0.458 when we hide the ball
 more often. The nearest-player baseline scores 0.408 and 0.329. We used the public five
 minutes of BAR-ATH only to check that the pipeline runs. With 17 possessions and a noise band
 of about 0.33 spellF1, that window can't rank anything.
@@ -48,8 +48,8 @@ the score is also multiplied by how well the player's velocity matches the ball'
 `0.25 + 0.75·exp(-Δv² / 2·2.5²)`, with player velocity differenced over 5 frames. A defender
 pressing the carrier is often as close to the ball as the carrier, but runs at the ball instead
 of with it. Without the velocity test, possession kept flipping to whoever was pressing in
-simulated matches, which stage that often: there it is worth 0.065 spellF1. On Metrica's two
-matches it makes almost no difference (0.452 without it, 0.455 with), so we keep it for the
+simulated matches, which stage that often: there it is worth 0.052 spellF1. On Metrica's two
+matches it makes almost no difference (0.467 without it, 0.470 with), so we keep it for the
 pressing situations it was built for, not as a general gain. A team's
 likelihood is `0.08 +` the best control score among its players.
 
@@ -66,9 +66,10 @@ in play, whether or not the ball is visible. The median player speed doesn't wor
 because most players walk or jog in open play too.
 
 *Correlated frames.* Consecutive frames are close to the same observation, so treating each
-as independent evidence overstates it badly. We raise each likelihood to the power 0.25
+as independent evidence overstates it badly. We raise each likelihood to the power 0.15
 before the HMM sees it. A team switch then needs evidence that persists for a while, and 25
-frames of one defender standing close aren't enough.
+frames of one defender standing close aren't enough. We used 0.25 until 13 November; see "A
+late change" below.
 
 ### 3. Possession model
 
@@ -85,6 +86,10 @@ described under Tooling.
 anything. A D or X gap of up to 3 s with the same team on both sides becomes that team. A
 spell under 1 s is folded into its neighbours, and a cluster of such blips is treated as one
 stretch, so flicker can't add up to an invented possession.
+
+`lead_restarts` then moves every restart 0.5 s earlier: the last 12 frames of each dead-ball
+spell that ends in a team spell go to that team. The model ends a stoppage only once players
+speed up again, which on Metrica comes a median 1.3 s after the restart.
 
 ### Why this design
 
@@ -176,18 +181,29 @@ larger cap. A smaller cap throws away more team evidence whenever the ball is hi
 costs little on Metrica but would cost more on BAR-ATH. Switching off the "unseen for 2 s"
 bonus changed the chosen setting's score by less than 0.001.
 
-spellF1 / macroF1, mean of the two Metrica games, with the submitted pipeline (power 0.25 and
-cleanup):
+spellF1 / macroF1, mean of the two Metrica games:
 
 | version | as tracked | extra ball dropouts |
 |---|---|---|
 | nearest player, 50-frame vote (the baseline) | 0.408 / 0.767 | 0.329 / 0.751 |
 | first version | 0.392 / 0.474 | 0.347 / 0.458 |
-| **submitted** | **0.474 / 0.766** | **0.435 / 0.758** |
+| dead-ball change (power 0.25, submitted until 13 November) | 0.474 / 0.766 | 0.435 / 0.758 |
+| **submitted: power 0.15, restarts 0.5 s earlier** | **0.484 / 0.775** | **0.458 / 0.767** |
 
 Dead-ball recall went from 8% to 84%. On the original 20-minute simulated match (seed 11), the
 offline pipeline went from 0.659 to 0.825 spellF1. The same runs also backed up the evidence
-power: 0.25 beat 0.1, 0.5 and 1.0 in both Metrica runs.
+power: 0.25 beat 0.1, 0.5 and 1.0 in both Metrica runs. 0.15 wasn't on that grid.
+
+### A late change, and how we checked it
+
+The validation report below found two small, consistent gains: evidence power 0.15 instead of
+0.25, and starting each restart 0.5 s earlier. Together they added 0.016 spellF1 on Metrica
+and 0.021 on four new simulated matches. We found them on those same matches, which flatters
+any choice, so before adopting them we ran eleven more simulated matches that played no part
+in finding them (seeds 101-103 and 301-308, two with goalkeepers). There the change added
+0.011 on average, was better on 9 of 11 and was significantly worse on none, and macroF1 rose
+on 10 of 11. The gain is below the 0.04 noise band of a single match, so we expect a small
+improvement, not a decisive one. We scored it on the public window once, afterwards.
 
 ### The full validation report
 
@@ -197,25 +213,25 @@ and scores everything with the official metric functions. In brief:
 
 - **Intervals.** With 5-95% block-bootstrap intervals over possessions, the submission beats the
   nearest-player baseline on all eight matches, and the paired interval of the difference
-  excludes zero every time (+0.06 to +0.11 spellF1 on Metrica).
-- **Post-processing.** Without cleanup, spellF1 falls by 0.05 on Metrica, significantly on all
-  four runs. Lighter cleanup is never better. Heavier cleanup scores slightly higher but predicts
-  too few possessions, and is significant on only one run. We kept 1 s / 3 s.
-- **Transitions.** Transition F1 depends heavily on the matching tolerance: 0.16-0.20 at 0.5 s,
-  0.28-0.35 at 1 s (the scoreboard's tolerance) and 0.64-0.67 at 5 s on Metrica. The median
-  timing error of turnovers and stoppages is close to zero. Restarts are the exception: we place
-  them a median 1.3 s late, because the model waits for players to speed up after the restart.
-- **Dead ball.** Precision 0.72-0.78 and recall 0.83-0.87 on Metrica, with 46-51 false
-  stoppages per 90 minutes, averaging 7-9 s.
-- **Hindsight.** The same model scores spellF1 0.455 offline (the submission), 0.247 with one
-  second of hindsight and 0.298 with none on Metrica. The fixed-lag mode is the most fragmented.
-- **Calibration.** Frames called at 99% or more confidence are right 85% of the time on Metrica
-  and 97% on simulations, so the posterior is a ranking, not a calibrated probability.
+  excludes zero every time (+0.06 to +0.13 spellF1 on Metrica).
+- **Post-processing.** Without cleanup, spellF1 falls from 0.470 to 0.442 on Metrica,
+  significantly on all four runs. No lighter or heavier variant is better. We kept 1 s / 3 s.
+- **Transitions.** Transition F1 depends heavily on the matching tolerance: 0.17-0.19 at 0.5 s,
+  0.32-0.36 at 1 s (the scoreboard's tolerance) and 0.63-0.66 at 5 s on Metrica. The median
+  timing error of turnovers and stoppages is close to zero. Restarts were placed a median 1.3 s
+  late, because the model waits for players to speed up after the restart. Starting them 0.5 s
+  earlier brings that to 0.9 s on Metrica and to zero on simulations.
+- **Dead ball.** Precision 0.73-0.79 and recall 0.83-0.87 on Metrica, with 34-40 false
+  stoppages per 90 minutes, averaging 8-12 s.
+- **Hindsight.** The same model scores spellF1 0.470 offline (the submission), 0.293 with one
+  second of hindsight and 0.322 with none on Metrica. The fixed-lag mode is the most fragmented.
+- **Calibration.** Frames called at 99% or more confidence are right 87% of the time on Metrica
+  and 98% on simulations, so the posterior is a ranking, not a calibrated probability.
 - **Sensitivity and ablations.** Halving or doubling the switch, stop and restart rates moves
-  spellF1 by under 0.01. On Metrica, the sticky model (worth 0.067), the cleanup (0.050), the
-  evidence discount, the player-speed stoppage term and the hidden-ball cap (0.023-0.027 each)
-  all earn their place. Velocity matching helps on simulations but makes no difference on
-  Metrica (section 11 of the report).
+  spellF1 by at most 0.016. On Metrica, the sticky model (worth 0.075), the player-speed
+  stoppage term (0.042), the hidden-ball cap (0.039), the evidence discount (0.036) and the
+  cleanup (0.028) all earn their place. Velocity matching helps on simulations (0.052) but makes
+  almost no difference on Metrica (section 11 of the report).
 
 `DESIGN_DECISIONS.md` explains each choice and lists what we tried that didn't work.
 
@@ -249,7 +265,9 @@ the public window has 17. The simulator had already shown the same fragmentation
 the fix (the evidence power) and its value on simulated matches. We also used the public window
 once for the Smart Tagging check above, which led us to leave tags out. We chose the dead-ball
 change on Metrica and simulated matches only, and scored it on the public window once,
-afterwards. No threshold was fitted to the public window.
+afterwards. The late change of 13 November was chosen and confirmed on Metrica and simulated
+matches, and scored on the public window once, afterwards. No threshold was fitted to the public
+window.
 
 | on the public window | macroF1 | spellF1 | possessions (truth 17) |
 |---|---|---|---|
@@ -257,10 +275,12 @@ afterwards. No threshold was fitted to the public window.
 | `baseline_smooth125` | 0.581 | 0.424 | 16 |
 | ours, first version (no evidence discount) | 0.709 | 0.317 | 36 |
 | ours, power 0.25 and cleanup, before the dead-ball change | 0.737 | 0.463 | 21 |
-| **ours, submitted** | **0.823** | **0.491** | **18** |
+| ours, after the dead-ball change (submitted until 13 November) | 0.823 | 0.491 | 18 |
+| **ours, submitted: power 0.15, restarts 0.5 s earlier** | **0.833** | **0.503** | **18** |
 
 Dead-ball recall on the public window rose from 0.38 to 0.80, close to the 84% we measured on
-Metrica. Transition F1 stayed at 0.18.
+Metrica. Transition F1 stayed at 0.18 through those changes, then rose to 0.24 with the 13
+November change, which starts restarts earlier.
 
 ## Limitations
 
@@ -268,14 +288,14 @@ Metrica. Transition F1 stayed at 0.18.
   throw-in or a restart taken at pace, looks like play.
 - Our validation labels are approximate. The Metrica labels come from event logs, not from
   corrected tracking, and we only had two matches.
-- Only the offline mode is strong. Answering live costs a lot: spellF1 0.247 with one second
-  of hindsight and 0.298 with none, against 0.455 offline, on Metrica. The project site's
+- Only the offline mode is strong. Answering live costs a lot: spellF1 0.293 with one second
+  of hindsight and 0.322 with none, against 0.470 offline, on Metrica. The project site's
   Console shows the one-second mode and says so.
-- We place changes of possession only roughly: transition F1 is 0.18 on the public window at
-  the scoreboard's 1 s tolerance. On Metrica the same pipeline scores 0.28-0.35 at 1 s and
-  0.64-0.67 at 5 s, so most changes are found but not to the second. Restarts come a median
-  1.3 s late. Possessions under 2 s are mostly merged away: 6% of Metrica's are matched.
-- The posterior is overconfident. Frames called at 99% or more are right 85% of the time on
+- We place changes of possession only roughly: transition F1 is 0.24 on the public window at
+  the scoreboard's 1 s tolerance (0.18 before 13 November). On Metrica the pipeline scores 0.32-0.36 at 1 s and 0.63-0.66
+  at 5 s, so most changes are found but not to the second. Restarts still come a median 0.9 s
+  late. Possessions under 2 s are mostly merged away: 4% of Metrica's are matched.
+- The posterior is overconfident. Frames called at 99% or more are right 87% of the time on
   Metrica, so we never read it as a probability.
 - The radii, speeds and switch rates are football priors, checked on a simulator and two real
   matches. Real tracking is messier than either. BAR-ATH has 46 track slots for 22 players
@@ -298,7 +318,8 @@ python3 make_submission.py
 
 This writes `evaluation/results/Team_MSN.csv`, runs the official validator on it and prints the
 file's SHA-256. The pipeline is deterministic, so every run gives the same file; ours is
-`42cc1f8a069a0aaa8692512c8075257c51db329ba7b7534d91f95a94041aeb9e`. The tests need no match
+`7e4134a1a6fb0da5d776edb35dad7117ab27d423592f485fe731a9c9872d6653`. (The version submitted until 13 November gave
+`42cc1f8a069a0aaa8692512c8075257c51db329ba7b7534d91f95a94041aeb9e`.) The tests need no match
 data: `python3 -m unittest discover -s tests`.
 
 To reproduce the validation, download Metrica's
