@@ -1031,8 +1031,19 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
           </section>
         </div>
 
-        <aside className="match-stats" aria-label="Match so far">
-          <section className="stat-tile">
+        <aside className={s.sideLayers} aria-label="What the estimator sees">
+          <BallLayer replay={replay} a={analytics} view={view} />
+          <PlayerLayer replay={replay} a={analytics} slot={selected} index={i} pinned={picked !== null} onClear={() => setPicked(null)} />
+        </aside>
+      </div>
+
+      <section className={s.section} aria-labelledby="mc-sofar">
+        <div className="section-header">
+          <p className="kicker">Match</p>
+          <h2 id="mc-sofar">The match so far</h2>
+        </div>
+        <div className={s.soFar}>
+          <section className={`stat-tile ${s.tile}`}>
             <p className="kicker">Possession share</p>
             <div className="share-values">
               <span>
@@ -1049,17 +1060,15 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
           </section>
           <TeamPanel totals={totals} />
           <EventsPanel replay={replay} events={analytics.events} index={i} onSeek={jump} />
-        </aside>
-      </div>
+        </div>
+      </section>
 
       <section className={s.section} aria-labelledby="mc-layers">
         <div className="section-header">
           <p className="kicker">Pipeline</p>
-          <h2 id="mc-layers">What the estimator sees in this frame</h2>
+          <h2 id="mc-layers">How it decides who has the ball</h2>
         </div>
-        <div className={s.layers}>
-          <BallLayer replay={replay} a={analytics} view={view} />
-          <PlayerLayer replay={replay} a={analytics} slot={selected} index={i} pinned={picked !== null} onClear={() => setPicked(null)} />
+        <div className={`${s.layers} ${s.layersTwo}`}>
           <DeadBallLayer a={analytics} view={view} />
           <PossessionLayer replay={replay} view={view} />
         </div>
@@ -1810,6 +1819,9 @@ const CONSOLE_CSS = `/* Match console. Built on the site's own classes and token
 /* sections */
 .mc-section { margin-top: 96px; }
 .mc-layers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+.mc-layersTwo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mc-sideLayers { display: grid; gap: 24px; align-content: start; min-width: 0; }
+.mc-soFar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch; }
 .mc-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .mc-dataGrid { display: grid; grid-template-columns: 7fr 5fr; gap: 24px; align-items: start; }
 .mc-side { display: grid; gap: 24px; }
@@ -1903,13 +1915,16 @@ const CONSOLE_CSS = `/* Match console. Built on the site's own classes and token
 
 @media (max-width: 1100px) {
   .mc-layers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mc-soFar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mc-soFar > :last-child { grid-column: 1 / -1; }
 }
 @media (max-width: 900px) {
   .mc-charts, .mc-dataGrid { grid-template-columns: 1fr; }
+  .mc-sideLayers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mc-section { margin-top: 64px; }
 }
 @media (max-width: 767px) {
-  .mc-layers { grid-template-columns: 1fr; }
+  .mc-layers, .mc-sideLayers, .mc-soFar { grid-template-columns: 1fr; }
   .mc-controls { grid-template-columns: 48px 1fr; }
   .mc-controls .timecode { grid-column: 1 / -1; white-space: nowrap; }
   .mc-controls input[type="range"] { grid-column: 1 / -1; }
