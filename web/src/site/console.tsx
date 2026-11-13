@@ -875,7 +875,6 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
   const [camera, setCamera] = useState<CameraMode>("follow");
   const [picked, setPicked] = useState<number | null>(null);
   const changes = useMemo(() => changesOf(replay.label), [replay]);
-  const [pinnedChange, setPinnedChange] = useState<number | null>(null);
   const last = replay.length - 1;
   const view = frameAt(replay, index);
   const i = view.index;
@@ -904,25 +903,9 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
     setPlaying(false);
     seek(to);
   };
-  // The inspector follows playback (the latest change at or before the playhead) until a change
-  // is picked, from its own buttons or from the events list.
-  let followChange = 0;
-  for (let k = 0; k < changes.length && changes[k]!.at <= Math.floor(index); k++) followChange = k;
-  const currentChange = pinnedChange ?? followChange;
-  const selectChange = (k: number) => {
-    const next = Math.max(0, Math.min(changes.length - 1, k));
-    setPinnedChange(next);
-    if (changes[next]) jump(changes[next]!.at);
-  };
-  const watchChange = (frame: number) => {
-    seek(frame - Math.round(2 * replay.fps));
-    setPlaying(true);
-  };
-  const seekEvent = (to: number) => {
-    jump(to);
-    const k = changes.findIndex((ch) => ch.at === to);
-    if (k >= 0) setPinnedChange(k);
-  };
+  // The Transitions page opens on the latest change at or before the playhead.
+  let nearChange = 0;
+  for (let k = 0; k < changes.length && changes[k]!.at <= Math.floor(index); k++) nearChange = k;
   const toggle = () => {
     if (!playing && index >= last) setIndex(0);
     setPlaying((p) => !p);
@@ -1107,30 +1090,33 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
             <p className="stat-note">Share of live-ball time so far, from the estimator's calls.</p>
           </section>
           <TeamPanel totals={totals} />
-          <EventsPanel replay={replay} events={analytics.events} index={i} onSeek={seekEvent} />
+          <EventsPanel replay={replay} events={analytics.events} index={i} onSeek={jump} />
         </div>
       </section>
 
       <section className={s.section} aria-labelledby="mc-inspector">
-        <div className="section-header">
-          <p className="kicker">Transitions</p>
-          <h2 id="mc-inspector">Transition inspector</h2>
-          <p className={s.sectionLede}>
-            Finding the moment possession really changes is the hard part of this challenge, so here is every change the estimate made, one at a time. It follows playback;
-            step through with the buttons, or pick a possession event above.
-          </p>
+        <div className={`card ${s.teaser}`}>
+          <div>
+            <p className="kicker">Transitions</p>
+            <h2 id="mc-inspector">Inspect every change of possession</h2>
+            <p>
+              The estimate changes its call {changes.length} times in this match. The Transitions page replays each one in slow motion, with who had the ball before and
+              after, an inferred cause, the model's probabilities and the simulator's verdict.
+            </p>
+          </div>
+          {changes.length > 0 && (
+            <a
+              className="button button-primary"
+              href={`/transitions?at=${changes[nearChange]!.at}`}
+              onClick={(e) => {
+                e.preventDefault();
+                go(`/transitions?at=${changes[nearChange]!.at}`);
+              }}
+            >
+              Open Transitions <Glyph name="Arrow" size={16} />
+            </a>
+          )}
         </div>
-        <TransitionInspector
-          replay={replay}
-          a={analytics}
-          changes={changes}
-          current={currentChange}
-          pinned={pinnedChange !== null}
-          index={i}
-          onSelect={selectChange}
-          onFollow={() => setPinnedChange(null)}
-          onWatch={watchChange}
-        />
       </section>
 
       <section className={s.section} aria-labelledby="mc-layers">
@@ -1201,6 +1187,7 @@ const GLYPHS: Record<string, string> = {
   SkipBack: "M18 6 9 12l9 6zM6 6h2v12H6z",
   SkipForward: "M6 6l9 6-9 6zM16 6h2v12h-2z",
   Upload: "M11 16V7.8L8.4 10.4 7 9l5-5 5 5-1.4 1.4L13 7.8V16zM5 20v-5h2v3h10v-3h2v5z",
+  Arrow: "M4 11h12.2l-4.6-4.6L13 5l7 7-7 7-1.4-1.4 4.6-4.6H4z",
 };
 
 function Glyph({ name, size = 15 }: { name: string; size?: number }) {
@@ -1916,173 +1903,6 @@ export function inspect(replay: Replay, a: Analytics, c: Change): Inspection {
   };
 }
 
-function TransitionInspector({
-  replay,
-  a,
-  changes,
-  current,
-  pinned,
-  index,
-  onSelect,
-  onFollow,
-  onWatch,
-}: {
-  replay: Replay;
-  a: Analytics;
-  changes: Change[];
-  current: number;
-  pinned: boolean;
-  index: number;
-  onSelect: (k: number) => void;
-  onFollow: () => void;
-  onWatch: (frame: number) => void;
-}) {
-  const c = changes[current];
-  const info = useMemo(() => (c ? inspect(replay, a, c) : null), [replay, a, c]);
-  if (!c || !info) {
-    return <p className="stat-note">The estimate never changes its call in this replay.</p>;
-  }
-  const fps = replay.fps;
-  const clock = (k: number) => formatClock((replay.firstFrame + k) / fps);
-  const who = (slot: number | null) => (slot === null ? "—" : slotName(replay, slot));
-  const pt = (p: [number, number] | null) => (p ? `${p[0].toFixed(1)}, ${p[1].toFixed(1)} m` : "—");
-  const truthLine = !replay.truth
-    ? null
-    : info.truth
-      ? Math.abs(info.truth.offset) < 0.1
-        ? { ok: true, text: "Matches the simulator's truth to within 0.1 s." }
-        : { ok: true, text: `Matches the simulator's truth, ${Math.abs(info.truth.offset).toFixed(1)} s ${info.truth.offset > 0 ? "late" : "early"}.` }
-      : { ok: false, text: "No change like this in the simulator's truth within 2 s: the estimate invented it." };
-
-  return (
-    <div className={`card ${s.inspector}`}>
-      <div className={s.inspHead}>
-        <div>
-          <p className={s.inspCount}>
-            Change {current + 1} of {changes.length} · {clock(c.at)}
-          </p>
-          <h3 className={s.inspTitle}>
-            <span className={`state-chip state-${c.from} no-hatch`} />
-            {LABEL_NAME[c.from]} <span className="muted">→</span> <span className={`state-chip state-${c.to} no-hatch`} />
-            {LABEL_NAME[c.to]}
-          </h3>
-        </div>
-        <div className={s.inspNav}>
-          <button type="button" className="button button-secondary" onClick={() => onSelect(current - 1)} disabled={current === 0}>
-            ← Previous
-          </button>
-          <button type="button" className="button button-secondary" onClick={() => onSelect(current + 1)} disabled={current === changes.length - 1}>
-            Next →
-          </button>
-          <button type="button" className="button button-primary" onClick={() => onWatch(c.at)}>
-            <Glyph name="Play" size={14} /> Watch it
-          </button>
-        </div>
-      </div>
-      {pinned && (
-        <button type="button" className={`text-link ${s.follow}`} onClick={onFollow}>
-          Follow playback again
-        </button>
-      )}
-
-      <div className={s.inspGrid}>
-        <InspectorPitch replay={replay} c={c} info={info} />
-        <div className={s.inspFacts}>
-          <div className={s.cause}>
-            <p className="kicker">
-              {info.kind === info.cause ? info.kind : `${info.kind} · ${info.cause}`}
-            </p>
-            <p>{info.causeNote}</p>
-            <p className={s.inferred}>Inferred from positions only: the tracking carries no event data.</p>
-          </div>
-          {truthLine && (
-            <p className={s.verdict} data-ok={truthLine.ok}>
-              {truthLine.ok ? "✓" : "✗"} {truthLine.text}
-            </p>
-          )}
-          <Rows
-            rows={[
-              ["Previous possessor", who(info.before)],
-              ["New possessor", who(info.after)],
-              ["Ball 1 s before", pt(info.ballBefore)],
-              ["Ball at the change", `${pt(info.ballAt)}${info.ballSeen ? "" : " (hidden)"}`],
-              ["Ball 1 s after", pt(info.ballAfter)],
-              ["Ball speed", Number.isFinite(info.ballSpeed) ? `${kmh(info.ballSpeed).toFixed(0)} km/h` : "—"],
-            ]}
-          />
-          <p className={s.miniLabel}>Nearest players at the change</p>
-          <ul className={s.nearList}>
-            {info.nearest.map((p) => (
-              <li key={p.slot}>
-                <i className={p.team === 0 ? "home-bg" : "away-bg"} />
-                <span>{slotName(replay, p.slot)}</span>
-                <b>{p.distance.toFixed(1)} m</b>
-                <b>{Number.isFinite(p.speed) ? `${kmh(p.speed).toFixed(0)} km/h` : "—"}</b>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      <ProbabilityWindow replay={replay} c={c} info={info} index={index} />
-    </div>
-  );
-}
-
-function InspectorPitch({ replay, c, info }: { replay: Replay; c: Change; info: Inspection }) {
-  const [L, W] = replay.pitch;
-  const fps = replay.fps;
-  const k = c.at;
-  const path = (lo: number, hi: number) => {
-    const pts: string[] = [];
-    for (let j = Math.max(0, lo); j <= Math.min(replay.length - 1, hi); j++) {
-      const e = replay.est[j];
-      if (e) pts.push(`${e[0].toFixed(2)},${e[1].toFixed(2)}`);
-    }
-    return pts.join(" ");
-  };
-  const row = replay.players[k]!;
-  const near = new Set(info.nearest.map((p) => p.slot));
-  const focus = [info.before, info.after].filter((v): v is number => v !== null);
-  return (
-    <figure className={s.inspPitch}>
-      <svg viewBox={`-3 -3 ${L + 6} ${W + 6}`} aria-label={`Pitch at the change: ball path from 2 s before to 2 s after`} role="img">
-        <rect x={0} y={0} width={L} height={W} className="pitch-field" />
-        <g className={s.miniLines}>
-          <rect x={0} y={0} width={L} height={W} />
-          <line x1={L / 2} y1={0} x2={L / 2} y2={W} />
-          <circle cx={L / 2} cy={W / 2} r={9.15} />
-          <rect x={0} y={(W - 40.3) / 2} width={16.5} height={40.3} />
-          <rect x={L - 16.5} y={(W - 40.3) / 2} width={16.5} height={40.3} />
-        </g>
-        {replay.teams.map((team, slot) => {
-          const x = row[slot * 2];
-          const y = row[slot * 2 + 1];
-          if (x == null || y == null) return null;
-          const key = near.has(slot) || focus.includes(slot);
-          return (
-            <g key={slot} opacity={key ? 1 : 0.35}>
-              <circle cx={x} cy={y} r={key ? 1.6 : 1.1} className={team === 0 ? s.miniHome : s.miniAway} />
-              {focus.includes(slot) && <circle cx={x} cy={y} r={2.8} className={s.miniFocus} />}
-              {key && (
-                <text x={x} y={y + 0.65} textAnchor="middle" className={s.miniNum}>
-                  {slotNumber(replay, slot)}
-                </text>
-              )}
-            </g>
-          );
-        })}
-        <polyline points={path(k - Math.round(2 * fps), k)} className={s.pathBefore} />
-        <polyline points={path(k, k + Math.round(2 * fps))} className={s.pathAfter} />
-        {info.ballAt && <circle cx={info.ballAt[0]} cy={info.ballAt[1]} r={1} className={s.miniBall} />}
-      </svg>
-      <figcaption className="chart-legend">
-        <span><i className={s.kBefore} />Ball, 2 s before</span>
-        <span><i className={s.kAfter} />Ball, 2 s after</span>
-        <span><i className={s.kRing} />Previous and new possessor</span>
-      </figcaption>
-    </figure>
-  );
-}
 
 function ProbabilityWindow({ replay, c, info, index }: { replay: Replay; c: Change; info: Inspection; index: number }) {
   const w = 720;
@@ -2140,6 +1960,420 @@ function ProbabilityWindow({ replay, c, info, index }: { replay: Replay; c: Chan
       </div>
       <p className={s.note}>The estimate answers {(replay.lag / fps).toFixed(1)} s after each frame, so these are its fixed-lag probabilities, not the whole-half ones the submission uses.</p>
     </div>
+  );
+}
+
+/* ---- the Transitions page ---- */
+
+type Kind = Inspection["kind"];
+const KIND_FILTERS: { value: "all" | Kind; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "Turnover", label: "Turnovers" },
+  { value: "Into dead ball", label: "Into dead ball" },
+  { value: "Restart", label: "Restarts" },
+];
+const RATES = [0.25, 0.5, 1] as const;
+type Rate = (typeof RATES)[number];
+/** Seconds replayed either side of a change. */
+const AROUND = 3;
+
+/** Move to another page of the site without a reload; the site's router listens to popstate. */
+function go(path: string) {
+  window.history.pushState({}, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  window.scrollTo({ top: 0 });
+}
+
+const kindOf = (c: Change): Kind => (c.to === "D" ? "Into dead ball" : c.from === "D" ? "Restart" : "Turnover");
+
+/** Every change of possession the estimate makes, replayed one at a time in slow motion. */
+export function TransitionsPage() {
+  const replay = useMemo(decodeReplay, []);
+  return (
+    <main id="main-content" className="page">
+      <style>{CONSOLE_CSS}</style>
+      <Transitions replay={replay} />
+    </main>
+  );
+}
+
+function Transitions({ replay }: { replay: Replay }) {
+  const a = useMemo(() => analyse(replay), [replay]);
+  const changes = useMemo(() => changesOf(replay.label), [replay]);
+  const infos = useMemo(() => changes.map((c) => inspect(replay, a, c)), [replay, a, changes]);
+  const fps = replay.fps;
+
+  // Open on the change asked for in the address (?at=frame), else the first one.
+  const [current, setCurrent] = useState(() => {
+    const at = Number(new URLSearchParams(window.location.search).get("at"));
+    const k = Number.isFinite(at) ? changes.findIndex((c) => c.at === at) : -1;
+    return k >= 0 ? k : 0;
+  });
+  const [filter, setFilter] = useState<"all" | Kind>("all");
+  const [rate, setRate] = useState<Rate>(0.25);
+  const [playing, setPlaying] = useState(false);
+  const [closeUp, setCloseUp] = useState(true);
+
+  const c = changes[current];
+  const info = infos[current];
+  const lo = c ? Math.max(0, c.at - Math.round(AROUND * fps)) : 0;
+  const hi = c ? Math.min(replay.length - 1, c.at + Math.round(AROUND * fps)) : 0;
+  const [t, setT] = useState(lo);
+
+  // A new change starts paused at the beginning of its window.
+  useEffect(() => {
+    setPlaying(false);
+    setT(lo);
+  }, [current, lo]);
+
+  const tRef = useRef(t);
+  tRef.current = t;
+  useEffect(() => {
+    if (!playing) return;
+    let raf = 0;
+    let previous = performance.now();
+    const tick = (now: number) => {
+      const next = Math.min(hi, tRef.current + ((now - previous) / 1000) * fps * rate);
+      previous = now;
+      setT(next);
+      if (next >= hi) {
+        setPlaying(false);
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, rate, hi, fps]);
+
+  const visible = changes.map((_, k) => k).filter((k) => filter === "all" || kindOf(changes[k]!) === filter);
+  const pos = visible.indexOf(current);
+  const step = (dir: number) => {
+    const list = visible.length ? visible : changes.map((_, k) => k);
+    const at = list.indexOf(current);
+    const next = at < 0 ? list[0] : list[Math.max(0, Math.min(list.length - 1, at + dir))];
+    if (next !== undefined) setCurrent(next);
+  };
+  const watch = () => {
+    if (t >= hi) setT(lo);
+    setPlaying((p) => !p);
+  };
+  const onKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.tagName === "SELECT" || target.tagName === "INPUT") return;
+    if (event.key === " " && target.tagName !== "BUTTON") {
+      event.preventDefault();
+      watch();
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      step(1);
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      step(-1);
+    }
+  };
+
+  const matched = infos.filter((i) => i.truth !== null).length;
+  const clock = (k: number) => formatClock((replay.firstFrame + k) / fps);
+
+  return (
+    <div className={`container ${s.root}`} onKeyDown={onKey} tabIndex={-1}>
+      <header className="page-header">
+        <div>
+          <div className="title-badge">
+            <p className="kicker">Transitions</p>
+            <span className="badge badge-demo" data-tooltip="Invented by starter/synthetic_match.py, so the true answer is known. Not real match data.">
+              Synthetic
+            </span>
+          </div>
+          <h1>How possession changes hands.</h1>
+          <p>
+            Deciding the moment possession really changes is the hardest part of this challenge. Here is every change the estimate made in the Console's simulated
+            match, replayed in slow motion from {AROUND} s before to {AROUND} s after, with who had the ball, what the model believed, and whether the simulator agrees.
+            {replay.truth ? ` ${matched} of ${changes.length} match a change in the simulator's truth within 2 s.` : ""}
+          </p>
+        </div>
+      </header>
+
+      {!c || !info ? (
+        <p className="stat-note">The estimate never changes its call in this replay.</p>
+      ) : (
+        <>
+          <div className={`toolbar ${s.toolbar}`}>
+            <div className="filter-chips" role="group" aria-label="Kind of change">
+              {KIND_FILTERS.map((f) => (
+                <button key={f.value} type="button" aria-pressed={filter === f.value} onClick={() => setFilter(f.value)}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <div className={s.inspNav}>
+              <button type="button" className="button button-secondary" onClick={() => step(-1)} disabled={pos === 0}>
+                ← Previous
+              </button>
+              <span className={s.inspCount}>
+                {pos >= 0 ? `${pos + 1} of ${visible.length}` : `${current + 1} of ${changes.length}`}
+              </span>
+              <button type="button" className="button button-secondary" onClick={() => step(1)} disabled={pos === visible.length - 1}>
+                Next →
+              </button>
+            </div>
+          </div>
+
+          <section className={`card ${s.inspector}`} aria-label={`Change at ${clock(c.at)}`}>
+            <div className={s.inspHead}>
+              <div>
+                <p className={s.inspCount}>
+                  {clock(c.at)} · change {current + 1} of {changes.length}
+                </p>
+                <h2 className={s.inspTitle}>
+                  <span className={`state-chip state-${c.from} no-hatch`} />
+                  {LABEL_NAME[c.from]} <span className="muted">→</span> <span className={`state-chip state-${c.to} no-hatch`} />
+                  {LABEL_NAME[c.to]}
+                </h2>
+              </div>
+            </div>
+
+            <div className={s.inspGrid}>
+              <div>
+                <SlowMotionPitch replay={replay} c={c} info={info} t={t} lo={lo} hi={hi} closeUp={closeUp} />
+                <div className={s.slowControls}>
+                  <button type="button" className="play-button" onClick={watch} aria-label={playing ? "Pause" : "Watch it in slow motion"}>
+                    <Glyph name={playing ? "Pause" : "Play"} size={18} />
+                  </button>
+                  <div className="segmented" role="group" aria-label="View">
+                    <button type="button" aria-pressed={closeUp} onClick={() => setCloseUp(true)}>
+                      Close-up
+                    </button>
+                    <button type="button" aria-pressed={!closeUp} onClick={() => setCloseUp(false)}>
+                      Whole pitch
+                    </button>
+                  </div>
+                  <div className="segmented" role="group" aria-label="Replay speed">
+                    {RATES.map((r) => (
+                      <button key={r} type="button" aria-pressed={rate === r} onClick={() => setRate(r)}>
+                        {r === 1 ? "1×" : r === 0.5 ? "½×" : "¼×"}
+                      </button>
+                    ))}
+                  </div>
+                  <span className={s.relClock}>
+                    {t < c.at ? "−" : "+"}
+                    {(Math.abs(t - c.at) / fps).toFixed(1)} s
+                  </span>
+                  <input
+                    type="range"
+                    min={lo}
+                    max={hi}
+                    step={0.25}
+                    value={t}
+                    onChange={(e) => {
+                      setPlaying(false);
+                      setT(Number(e.target.value));
+                    }}
+                    aria-label="Position around the change"
+                    aria-valuetext={`${((t - c.at) / fps).toFixed(1)} seconds from the change`}
+                  />
+                </div>
+                <p className="keys-hint">
+                  <span>Space</span>watch it <span>← →</span>previous or next change
+                </p>
+              </div>
+              <TransitionFacts replay={replay} c={c} info={info} />
+            </div>
+            <ProbabilityWindow replay={replay} c={c} info={info} index={t} />
+          </section>
+
+          <section className={s.section} aria-labelledby="tr-all">
+            <div className="section-header">
+              <p className="kicker">All changes</p>
+              <h2 id="tr-all">Every change in this match</h2>
+            </div>
+            <div className={`card ${s.changeList}`}>
+              <div className={s.changeHead} aria-hidden="true">
+                <span>time</span>
+                <span>change</span>
+                <span>cause, inferred</span>
+                <span>against the truth</span>
+              </div>
+              <ul>
+                {visible.map((k) => {
+                  const ch = changes[k]!;
+                  const inf = infos[k]!;
+                  return (
+                    <li key={ch.at}>
+                      <button type="button" aria-pressed={k === current} onClick={() => setCurrent(k)}>
+                        <span className={s.eventTime}>{clock(ch.at)}</span>
+                        <span>
+                          <span className={`state-chip state-${ch.from} no-hatch`} />
+                          {LABEL_NAME[ch.from]} → <span className={`state-chip state-${ch.to} no-hatch`} />
+                          {LABEL_NAME[ch.to]}
+                        </span>
+                        <span>{inf.kind === inf.cause ? inf.kind : inf.cause}</span>
+                        <span className={s.truth} data-agree={replay.truth ? inf.truth !== null : undefined}>
+                          {!replay.truth
+                            ? "—"
+                            : inf.truth
+                              ? Math.abs(inf.truth.offset) < 0.1
+                                ? "✓ on time"
+                                : `✓ ${Math.abs(inf.truth.offset).toFixed(1)} s ${inf.truth.offset > 0 ? "late" : "early"}`
+                              : "✗ not in the truth"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TransitionFacts({ replay, c, info }: { replay: Replay; c: Change; info: Inspection }) {
+  const fps = replay.fps;
+  const who = (slot: number | null) => (slot === null ? "—" : slotName(replay, slot));
+  const pt = (p: [number, number] | null) => (p ? `${p[0].toFixed(1)}, ${p[1].toFixed(1)} m` : "—");
+  const truthLine = !replay.truth
+    ? null
+    : info.truth
+      ? Math.abs(info.truth.offset) < 0.1
+        ? { ok: true, text: "Matches the simulator's truth to within 0.1 s." }
+        : { ok: true, text: `Matches the simulator's truth, ${Math.abs(info.truth.offset).toFixed(1)} s ${info.truth.offset > 0 ? "late" : "early"}.` }
+      : { ok: false, text: "No change like this in the simulator's truth within 2 s: the estimate invented it." };
+  return (
+    <div className={s.inspFacts}>
+      <div className={s.cause}>
+        <p className="kicker">{info.kind === info.cause ? info.kind : `${info.kind} · ${info.cause}`}</p>
+        <p>{info.causeNote}</p>
+        <p className={s.inferred}>Inferred from positions only: the tracking carries no event data.</p>
+      </div>
+      {truthLine && (
+        <p className={s.verdict} data-ok={truthLine.ok}>
+          {truthLine.ok ? "✓" : "✗"} {truthLine.text}
+        </p>
+      )}
+      <Rows
+        rows={[
+          ["Previous possessor", who(info.before)],
+          ["New possessor", who(info.after)],
+          ["Ball 1 s before", pt(info.ballBefore)],
+          ["Ball at the change", `${pt(info.ballAt)}${info.ballSeen ? "" : " (hidden)"}`],
+          ["Ball 1 s after", pt(info.ballAfter)],
+          ["Ball speed at the change", Number.isFinite(info.ballSpeed) ? `${kmh(info.ballSpeed).toFixed(0)} km/h` : "—"],
+        ]}
+      />
+      <p className={s.miniLabel}>Nearest players at the change</p>
+      <ul className={s.nearList}>
+        {info.nearest.map((p) => (
+          <li key={p.slot}>
+            <i className={p.team === 0 ? "home-bg" : "away-bg"} />
+            <span>{slotName(replay, p.slot)}</span>
+            <b>{p.distance.toFixed(1)} m</b>
+            <b>{Number.isFinite(p.speed) ? `${kmh(p.speed).toFixed(0)} km/h` : "—"}</b>
+          </li>
+        ))}
+      </ul>
+      <p className={s.note}>
+        The estimate's change is at {formatClock((replay.firstFrame + c.at) / fps)}; the slow-motion replay runs {AROUND} s either side.
+      </p>
+    </div>
+  );
+}
+
+/** The pitch from above at fractional frame t: everyone moving, the ball's path drawing in. */
+function SlowMotionPitch({ replay, c, info, t, lo, hi, closeUp }: { replay: Replay; c: Change; info: Inspection; t: number; lo: number; hi: number; closeUp: boolean }) {
+  const [L, W] = replay.pitch;
+  // Close-up: a 48 x 32 m window centred on where the ball goes during the replay, kept on the pitch.
+  const box = useMemo(() => {
+    if (!closeUp) return { x: -3, y: -3, w: L + 6, h: W + 6 };
+    let sx = 0;
+    let sy = 0;
+    let n = 0;
+    for (let j = lo; j <= hi; j++) {
+      const e = replay.est[j];
+      if (e) {
+        sx += e[0];
+        sy += e[1];
+        n++;
+      }
+    }
+    const w = 48;
+    const h = 32;
+    const cx = n ? sx / n : L / 2;
+    const cy = n ? sy / n : W / 2;
+    return { x: Math.max(-3, Math.min(L + 3 - w, cx - w / 2)), y: Math.max(-3, Math.min(W + 3 - h, cy - h / 2)), w, h };
+  }, [closeUp, replay, lo, hi, L, W]);
+  const k = closeUp ? 0.7 : 1; // markers a little smaller when zoomed in
+  const view = frameAt(replay, t);
+  const focus = [info.before, info.after].filter((v): v is number => v !== null);
+  const near = new Set(info.nearest.map((p) => p.slot));
+  const trail: string[] = [];
+  for (let j = lo; j <= Math.floor(t); j++) {
+    const e = replay.est[j];
+    if (e) trail.push(`${e[0].toFixed(2)},${e[1].toFixed(2)}`);
+  }
+  if (view.est) trail.push(`${view.est.x.toFixed(2)},${view.est.y.toFixed(2)}`);
+  const atChange = Math.abs(t - c.at) < replay.fps * 0.6;
+  const call = view.label;
+  const truth = replay.truth ? (replay.truth[view.index] as ReplayCall) : null;
+  const callName = (k: ReplayCall) => (k === "H" ? "Home ball" : k === "A" ? "Away ball" : k === "D" ? "Dead ball" : "Not in play");
+  return (
+    <figure className={s.inspPitch}>
+      <div className={s.slowChips}>
+        <span className={`live-state live-state-${call === "X" ? "D" : call}`}>Estimate: {callName(call)}</span>
+        {truth && <span className={`live-state live-state-${truth === "X" ? "D" : truth}`}>Truth: {callName(truth)}</span>}
+        {atChange && <span className={s.changeFlag}>Possession changes</span>}
+      </div>
+      <svg viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`} role="img" aria-label="Players and ball from above around the change">
+        <rect x={box.x} y={box.y} width={box.w} height={box.h} className="pitch-field" />
+        <rect x={0} y={0} width={L} height={W} className="pitch-field" />
+        <g className={s.miniLines}>
+          <rect x={0} y={0} width={L} height={W} />
+          <line x1={L / 2} y1={0} x2={L / 2} y2={W} />
+          <circle cx={L / 2} cy={W / 2} r={9.15} />
+          <rect x={0} y={(W - 40.3) / 2} width={16.5} height={40.3} />
+          <rect x={L - 16.5} y={(W - 40.3) / 2} width={16.5} height={40.3} />
+          <rect x={0} y={(W - 18.32) / 2} width={5.5} height={18.32} />
+          <rect x={L - 5.5} y={(W - 18.32) / 2} width={5.5} height={18.32} />
+        </g>
+        <polyline points={trail.join(" ")} className={t < c.at ? s.pathBefore : s.pathAfter} />
+        {view.players.map((p) => {
+          const key = near.has(p.slot) || focus.includes(p.slot);
+          return (
+            <g key={p.slot} opacity={key ? 1 : 0.45}>
+              <circle cx={p.x} cy={p.y} r={(key ? 1.6 : 1.15) * k} className={p.team === 0 ? s.miniHome : s.miniAway} />
+              {focus.includes(p.slot) && <circle cx={p.x} cy={p.y} r={2.8 * k} className={s.miniFocus} />}
+              {key && (
+                <text x={p.x} y={p.y + 0.65 * k} textAnchor="middle" className={s.miniNum} style={{ fontSize: `${1.7 * k}px` }}>
+                  {slotNumber(replay, p.slot)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        {view.est && view.est.sigma !== null && view.est.sigma < 15 && !view.ball && (
+          <circle cx={view.est.x} cy={view.est.y} r={Math.max(view.est.sigma, 0.6)} className={s.miniRing} />
+        )}
+        {view.est && <circle cx={view.est.x} cy={view.est.y} r={0.9 * k} className={s.miniBall} data-hidden={!view.ball} />}
+        {atChange && view.est && <circle cx={view.est.x} cy={view.est.y} r={4 * k} className={s.changePulse} />}
+      </svg>
+      <figcaption className="chart-legend">
+        <span>
+          <i className={s.kRing} />
+          Previous and new possessor
+        </span>
+        <span>
+          <i className={s.kAfter} />
+          Ball's path so far
+        </span>
+        <span>
+          <i className={s.kEstRing} />
+          Ball hidden: estimate ± σ
+        </span>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -2330,6 +2564,33 @@ const CONSOLE_CSS = `/* Match console. Built on the site's own classes and token
 .mc-kHead { height: 10px !important; width: 2px !important; background: var(--muted); }
 .mc-root .mc-probHead { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 2; }
 
+/* console: link to the Transitions page */
+.mc-teaser { padding: 32px; display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+.mc-teaser > div { max-width: 70ch; }
+.mc-teaser h2 { margin-top: 8px; }
+.mc-teaser p:not(.kicker) { margin-top: 12px; color: var(--muted); }
+
+/* transitions page */
+.mc-slowControls { display: grid; grid-template-columns: 48px auto auto auto 1fr; align-items: center; gap: 14px; margin-top: 14px; }
+.mc-slowControls .play-button { color: white; }
+[data-theme="dark"] .mc-slowControls .play-button { color: #0f1214; }
+.mc-relClock { font: 600 14px/20px "JetBrains Mono", "JetBrains Mono Variable", monospace; font-variant-numeric: tabular-nums; min-width: 58px; }
+.mc-slowChips { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; min-height: 26px; margin-bottom: 8px; }
+.mc-changeFlag { font-size: 12px; font-weight: 600; color: var(--amber); }
+.mc-miniRing { fill: color-mix(in srgb, var(--amber) 14%, transparent); stroke: var(--amber); stroke-width: 0.3; stroke-dasharray: 0.8 0.6; }
+.mc-miniBall[data-hidden="true"] { fill: none; stroke: var(--amber); stroke-width: 0.4; }
+.mc-changePulse { fill: none; stroke: var(--amber); stroke-width: 0.5; opacity: 0.8; }
+.mc-kEstRing { border: 1.5px dashed var(--amber); border-radius: 50% !important; }
+.mc-changeList { padding: 8px 24px 16px; }
+.mc-changeHead, .mc-changeList li button { display: grid; grid-template-columns: 72px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; }
+.mc-changeHead { padding: 12px 8px; color: var(--muted); font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.mc-changeList ul { list-style: none; margin: 0; padding: 0; }
+.mc-changeList li + li { border-top: 1px solid var(--border); }
+.mc-changeList li button { width: 100%; padding: 10px 8px; background: none; border: 0; text-align: left; font-size: 14px; border-radius: 4px; cursor: pointer; }
+.mc-changeList li button:hover { background: var(--surface-2); }
+.mc-changeList li button[aria-pressed="true"] { background: var(--green-light); }
+.mc-changeList .state-chip { margin-right: 6px; }
+
 /* sections */
 .mc-section { margin-top: 96px; }
 .mc-layers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
@@ -2440,6 +2701,12 @@ const CONSOLE_CSS = `/* Match console. Built on the site's own classes and token
 }
 @media (max-width: 767px) {
   .mc-layers, .mc-sideLayers, .mc-soFar { grid-template-columns: 1fr; }
+  .mc-slowControls { grid-template-columns: 48px 1fr; }
+  .mc-slowControls .segmented { grid-column: 1 / -1; }
+  .mc-slowControls input[type="range"] { grid-column: 1 / -1; }
+  .mc-changeHead { display: none !important; }
+  .mc-changeList li button { grid-template-columns: 64px 1fr; }
+  .mc-changeList li button > span:nth-child(n+3) { grid-column: 2; font-size: 13px; color: var(--muted); }
   .mc-controls { grid-template-columns: 48px 1fr; }
   .mc-controls .timecode { grid-column: 1 / -1; white-space: nowrap; }
   .mc-controls input[type="range"] { grid-column: 1 / -1; }
