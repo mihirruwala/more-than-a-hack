@@ -809,7 +809,11 @@ const CAMERAS: { value: CameraMode; label: string }[] = [
 ];
 
 /** The Match console page: the live estimator played back on a simulated match. */
-export function ConsolePage() {
+/**
+ * The built-in synthetic match, or a replay file the visitor picks. The file is read in this tab
+ * and never stored or uploaded. Shared by the Console and Transitions pages.
+ */
+function usePickedReplay(id: string) {
   const builtIn = useMemo(decodeReplay, []);
   const [custom, setCustom] = useState<{ replay: Replay; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -818,7 +822,6 @@ export function ConsolePage() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    // Read in this tab only: the file is never stored or uploaded.
     const parsed = parseReplay(await file.text());
     if (!parsed.ok) {
       setError(`${file.name}: ${parsed.error}`);
@@ -830,9 +833,9 @@ export function ConsolePage() {
   };
 
   const picker = (
-    <section className={`card ${s.card} ${s.picker}`} aria-labelledby="mc-own">
+    <section className={`card ${s.card} ${s.picker}`} aria-labelledby={id}>
       <div className="chart-heading">
-        <h3 id="mc-own">Watch your own replay</h3>
+        <h3 id={id}>Watch your own replay</h3>
         <span className={s.tag}>stays in your browser</span>
       </div>
       <p className={s.pickerText}>
@@ -859,10 +862,15 @@ export function ConsolePage() {
     </section>
   );
 
+  return { replay: custom?.replay ?? builtIn, key: custom?.name ?? "built-in", picker };
+}
+
+export function ConsolePage() {
+  const { replay, key, picker } = usePickedReplay("mc-own");
   return (
     <main id="main-content" className="page">
       <style>{CONSOLE_CSS}</style>
-      <Console key={custom?.name ?? "built-in"} replay={custom?.replay ?? builtIn} extra={picker} />
+      <Console key={key} replay={replay} extra={picker} />
     </main>
   );
 }
@@ -1988,16 +1996,16 @@ const kindOf = (c: Change): Kind => (c.to === "D" ? "Into dead ball" : c.from ==
 
 /** Every change of possession the estimate makes, replayed one at a time in slow motion. */
 export function TransitionsPage() {
-  const replay = useMemo(decodeReplay, []);
+  const { replay, key, picker } = usePickedReplay("tr-own");
   return (
     <main id="main-content" className="page">
       <style>{CONSOLE_CSS}</style>
-      <Transitions replay={replay} />
+      <Transitions key={key} replay={replay} picker={picker} builtIn={key === "built-in"} />
     </main>
   );
 }
 
-function Transitions({ replay }: { replay: Replay }) {
+function Transitions({ replay, picker, builtIn }: { replay: Replay; picker: ReactNode; builtIn: boolean }) {
   const a = useMemo(() => analyse(replay), [replay]);
   const changes = useMemo(() => changesOf(replay.label), [replay]);
   const infos = useMemo(() => changes.map((c) => inspect(replay, a, c)), [replay, a, changes]);
@@ -2005,7 +2013,8 @@ function Transitions({ replay }: { replay: Replay }) {
 
   // Open on the change asked for in the address (?at=frame), else the first one.
   const [current, setCurrent] = useState(() => {
-    const at = Number(new URLSearchParams(window.location.search).get("at"));
+    // ?at=frame comes from the Console's built-in match; it means nothing for a loaded file.
+    const at = builtIn ? Number(new URLSearchParams(window.location.search).get("at")) : NaN;
     const k = Number.isFinite(at) ? changes.findIndex((c) => c.at === at) : -1;
     return k >= 0 ? k : 0;
   });
@@ -2074,6 +2083,7 @@ function Transitions({ replay }: { replay: Replay }) {
   };
 
   const matched = infos.filter((i) => i.truth !== null).length;
+  const synthetic = replay.provenance === "synthetic";
   const clock = (k: number) => formatClock((replay.firstFrame + k) / fps);
 
   return (
@@ -2082,21 +2092,33 @@ function Transitions({ replay }: { replay: Replay }) {
         <div>
           <div className="title-badge">
             <p className="kicker">Transitions</p>
-            <span className="badge badge-demo" data-tooltip="Invented by starter/synthetic_match.py, so the true answer is known. Not real match data.">
-              Synthetic
-            </span>
+            {synthetic ? (
+              <span className="badge badge-demo" data-tooltip="Invented by starter/synthetic_match.py, so the true answer is known. Not real match data.">
+                Synthetic
+              </span>
+            ) : (
+              <span className="badge badge-published" data-tooltip="Written on this machine by live_estimator.py --replay. No ground truth travels with it.">
+                Local run
+              </span>
+            )}
           </div>
           <h1>How possession changes hands.</h1>
           <p>
-            Deciding the moment possession really changes is the hardest part of this challenge. Here is every change the estimate made in the Console's simulated
-            match, replayed in slow motion from {AROUND} s before to {AROUND} s after, with who had the ball, what the model believed, and whether the simulator agrees.
-            {replay.truth ? ` ${matched} of ${changes.length} match a change in the simulator's truth within 2 s.` : ""}
+            Deciding the moment possession really changes is the hardest part of this challenge. Here is every change the estimate made in{" "}
+            {builtIn ? "the Console's simulated match" : "your replay"}, replayed in slow motion from {AROUND} s before to {AROUND} s after, with who had the ball and
+            what the model believed{replay.truth ? ", and whether the simulator agrees" : ""}.
+            {replay.truth
+              ? ` ${matched} of ${changes.length} match a change in the simulator's truth within 2 s.`
+              : " A replay from a local run carries no ground truth, so nothing here is a score."}
           </p>
         </div>
       </header>
 
       {!c || !info ? (
-        <p className="stat-note">The estimate never changes its call in this replay.</p>
+        <>
+          <p className="stat-note">The estimate never changes its call in this replay.</p>
+          <div className={s.section}>{picker}</div>
+        </>
       ) : (
         <>
           <div className={`toolbar ${s.toolbar}`}>
@@ -2224,6 +2246,10 @@ function Transitions({ replay }: { replay: Replay }) {
                 })}
               </ul>
             </div>
+          </section>
+
+          <section className={s.section} aria-label="Your own replay">
+            <div className={s.pickerWrap}>{picker}</div>
           </section>
         </>
       )}
@@ -2601,6 +2627,7 @@ const CONSOLE_CSS = `/* Match console. Built on the site's own classes and token
 .mc-dataGrid { display: grid; grid-template-columns: 7fr 5fr; gap: 24px; align-items: start; }
 .mc-side { display: grid; gap: 24px; }
 .mc-picker { display: grid; gap: 14px; }
+.mc-pickerWrap { max-width: 640px; }
 .mc-picker .chart-heading { margin-bottom: 0; }
 .mc-pickerText { color: var(--muted); font-size: 14px; line-height: 22px; }
 .mc-command {
