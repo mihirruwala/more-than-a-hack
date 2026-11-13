@@ -45,10 +45,12 @@ Each frame gets three likelihoods: home, away and dead ball.
 *Team evidence.* A player's control score is `exp(-d² / 2s²)`, where `d` is their distance to
 the estimated ball and `s² = 1.6² + σ²`, with σ the ball's uncertainty. When the ball is seen,
 the score is also multiplied by how well the player's velocity matches the ball's,
-`0.25 + 0.75·exp(-Δv² / 2·2.5²)`, with player velocity differenced over 5 frames. That
-second factor matters more than anything else in the model. A defender pressing the carrier
-is often as close to the ball as the carrier, but runs at the ball instead of with it.
-Without the velocity test, possession kept flipping to whoever was pressing. A team's
+`0.25 + 0.75·exp(-Δv² / 2·2.5²)`, with player velocity differenced over 5 frames. A defender
+pressing the carrier is often as close to the ball as the carrier, but runs at the ball instead
+of with it. Without the velocity test, possession kept flipping to whoever was pressing in
+simulated matches, which stage that often: there it is worth 0.065 spellF1. On Metrica's two
+matches it makes almost no difference (0.452 without it, 0.455 with), so we keep it for the
+pressing situations it was built for, not as a general gain. A team's
 likelihood is `0.08 +` the best control score among its players.
 
 While the ball is unseen, each player's control score is capped at 0.25. The ball's position
@@ -187,6 +189,36 @@ Dead-ball recall went from 8% to 84%. On the original 20-minute simulated match 
 offline pipeline went from 0.659 to 0.825 spellF1. The same runs also backed up the evidence
 power: 0.25 beat 0.1, 0.5 and 1.0 in both Metrica runs.
 
+### The full validation report
+
+`python3 tools/validation_report.py` regenerates `docs/VALIDATION.md`. It covers the four
+Metrica runs and four new simulated matches (seeds 201-204) that no setting was ever chosen on,
+and scores everything with the official metric functions. In brief:
+
+- **Intervals.** With 5-95% block-bootstrap intervals over possessions, the submission beats the
+  nearest-player baseline on all eight matches, and the paired interval of the difference
+  excludes zero every time (+0.06 to +0.11 spellF1 on Metrica).
+- **Post-processing.** Without cleanup, spellF1 falls by 0.05 on Metrica, significantly on all
+  four runs. Lighter cleanup is never better. Heavier cleanup scores slightly higher but predicts
+  too few possessions, and is significant on only one run. We kept 1 s / 3 s.
+- **Transitions.** Transition F1 depends heavily on the matching tolerance: 0.16-0.20 at 0.5 s,
+  0.28-0.35 at 1 s (the scoreboard's tolerance) and 0.64-0.67 at 5 s on Metrica. The median
+  timing error of turnovers and stoppages is close to zero. Restarts are the exception: we place
+  them a median 1.3 s late, because the model waits for players to speed up after the restart.
+- **Dead ball.** Precision 0.72-0.78 and recall 0.83-0.87 on Metrica, with 46-51 false
+  stoppages per 90 minutes, averaging 7-9 s.
+- **Hindsight.** The same model scores spellF1 0.455 offline (the submission), 0.247 with one
+  second of hindsight and 0.298 with none on Metrica. The fixed-lag mode is the most fragmented.
+- **Calibration.** Frames called at 99% or more confidence are right 85% of the time on Metrica
+  and 97% on simulations, so the posterior is a ranking, not a calibrated probability.
+- **Sensitivity and ablations.** Halving or doubling the switch, stop and restart rates moves
+  spellF1 by under 0.01. On Metrica, the sticky model (worth 0.067), the cleanup (0.050), the
+  evidence discount, the player-speed stoppage term and the hidden-ball cap (0.023-0.027 each)
+  all earn their place. Velocity matching helps on simulations but makes no difference on
+  Metrica (section 11 of the report).
+
+`DESIGN_DECISIONS.md` explains each choice and lists what we tried that didn't work.
+
 ## Possession rules we implemented
 
 A player controls the ball when they are near it and moving with it. One frame of that isn't
@@ -236,11 +268,15 @@ Metrica. Transition F1 stayed at 0.18.
   throw-in or a restart taken at pace, looks like play.
 - Our validation labels are approximate. The Metrica labels come from event logs, not from
   corrected tracking, and we only had two matches.
-- The dead-ball change helps the offline pipeline but makes the zero-lag live estimator more
-  fragmented on simulated matches (spellF1 0.485 to 0.411). The submission is offline and the
-  Barca Lab replay view uses a lag, so neither is affected.
-- We detect few of the real changes of possession: transition F1 is 0.18 on the public window.
-  Cutting fragmentation is what traded those away.
+- Only the offline mode is strong. Answering live costs a lot: spellF1 0.247 with one second
+  of hindsight and 0.298 with none, against 0.455 offline, on Metrica. The project site's
+  Console shows the one-second mode and says so.
+- We place changes of possession only roughly: transition F1 is 0.18 on the public window at
+  the scoreboard's 1 s tolerance. On Metrica the same pipeline scores 0.28-0.35 at 1 s and
+  0.64-0.67 at 5 s, so most changes are found but not to the second. Restarts come a median
+  1.3 s late. Possessions under 2 s are mostly merged away: 6% of Metrica's are matched.
+- The posterior is overconfident. Frames called at 99% or more are right 85% of the time on
+  Metrica, so we never read it as a probability.
 - The radii, speeds and switch rates are football priors, checked on a simulator and two real
   matches. Real tracking is messier than either. BAR-ATH has 46 track slots for 22 players
   because of identity switches, though we only use each slot's team, so that matters little.
@@ -267,8 +303,10 @@ data: `python3 -m unittest discover -s tests`.
 
 To reproduce the validation, download Metrica's
 `Sample_Game_{1,2}_RawTrackingData_{Home,Away}_Team.csv` and `Sample_Game_{1,2}_RawEventsData.csv`
-into `external/metrica/` (gitignored), then run `python3 tools/external_check.py` and
-`python3 tools/dead_ball_study.py`.
+into `external/metrica/` (gitignored), then run `python3 tools/external_check.py`,
+`python3 tools/dead_ball_study.py` and `python3 tools/validation_report.py`. The last one writes
+`docs/VALIDATION.md` and takes about ten minutes the first time, then under a minute from its
+cache.
 
 ## Tooling
 
@@ -279,4 +317,6 @@ on our own machines.
 
 `web/` holds Barca Lab, a local web console we built alongside the pipeline. It has an
 experiment registry, a submission pre-check, and a replay view that plays the estimator back on
-a pitch. It isn't part of the submission pipeline and never reads the match data.
+a pitch. `web/src/site/` is the source of the project site's Console page, which plays the
+estimator back on a simulated match and has a transition inspector for examining each change of
+possession. None of it is part of the submission pipeline, and none of it reads the match data.
