@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import builtIn from "../data/fixtures/liveReplay.json";
-import { analyse, decodeReplay, frameAt, heatmap, parseReplay, percentile, slotName, teamTotals, type Replay } from "./console";
+import { analyse, changesOf, decodeReplay, frameAt, heatmap, inspect, parseReplay, percentile, slotName, teamTotals, type Replay } from "./console";
 
 function replay(): Replay {
   const parsed = parseReplay(builtIn);
@@ -88,5 +88,58 @@ describe("analyse", () => {
   it("names slots by team", () => {
     expect(slotName(r, 0)).toBe("Home #1");
     expect(slotName(r, 11)).toBe("Away #1");
+  });
+});
+
+describe("impossible speeds", () => {
+  it("treats a track jump as a tracking error, not a 2,000 km/h sprint", () => {
+    const r = decodeReplay();
+    // Hand slot 3's track to someone 60 m away for the rest of the replay, as an identity
+    // switch in real tracking does.
+    const players = r.players.map((row, i) => (i < 300 ? row : row.map((v, j) => (j === 6 && v !== null ? Math.min(104, v + 60) : v))));
+    const a = analyse({ ...r, players });
+    const top = Math.max(...Array.from(a.topSpeed[3]!));
+    expect(top * 3.6).toBeLessThan(45);
+    expect(a.jumps[3]).toBeGreaterThan(0);
+    const [home] = teamTotals({ ...r, players }, a, r.length - 1);
+    expect(home.topSpeed * 3.6).toBeLessThan(45);
+  });
+
+  it("finds no jumps in the demo match", () => {
+    const a = analyse(decodeReplay());
+    expect(a.jumps.every((n) => n === 0)).toBe(true);
+  });
+});
+
+describe("transition inspector", () => {
+  const r = decodeReplay();
+  const a = analyse(r);
+  const changes = changesOf(r.label);
+
+  it("lists every change of call, never into or out of X", () => {
+    expect(changes.length).toBeGreaterThan(5);
+    for (const c of changes) {
+      expect(c.from).not.toBe(c.to);
+      expect(r.label[c.at]).toBe(c.to);
+      expect(r.label[c.at - 1]).toBe(c.from);
+    }
+  });
+
+  it("gives every change a kind, a cause and possessors that fit it", () => {
+    for (const c of changes) {
+      const info = inspect(r, a, c);
+      if (c.to === "D") expect(info.kind).toBe("Into dead ball");
+      else if (c.from === "D") expect(info.kind).toBe("Restart");
+      else expect(info.kind).toBe("Turnover");
+      if (info.before !== null) expect(r.teams[info.before]).toBe(c.from === "H" ? 0 : 1);
+      if (info.after !== null) expect(r.teams[info.after]).toBe(c.to === "H" ? 0 : 1);
+      expect(info.cause.length).toBeGreaterThan(0);
+      expect(info.nearest.length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("matches most changes to the simulator's truth", () => {
+    const matched = changes.filter((c) => inspect(r, a, c).truth !== null).length;
+    expect(matched / changes.length).toBeGreaterThan(0.3);
   });
 });

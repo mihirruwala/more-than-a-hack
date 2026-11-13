@@ -237,6 +237,14 @@ const DEAD_SPEED_WIDTH = 0.4;
 const CONTROL_RADIUS = 1.6;
 /** A high-speed run: at least 19.8 km/h (5.5 m/s) held for a second. The usual broadcast threshold. */
 const HIGH_SPEED = 5.5;
+/**
+ * Faster than any footballer runs (the fastest sprint ever timed peaks near 12.4 m/s). A track
+ * that moves faster has jumped: usually a tracking slot handed from one player to another. Such
+ * moves are left out of speeds, distances and runs instead of being reported as 2,000 km/h.
+ */
+const MAX_PLAYER_SPEED = 12.5;
+/** A struck ball tops out around 35 m/s; anything faster is the ball estimate jumping. */
+const MAX_BALL_SPEED = 45;
 
 const kmh = (ms: number) => ms * 3.6;
 
@@ -264,6 +272,8 @@ interface Analytics {
   nearestDistance: Float32Array;
   /** Cumulative distance per slot, metres. */
   distance: Float32Array[];
+  /** Tracking jumps per slot: one-frame moves no player could make, left out of the figures. */
+  jumps: number[];
   /** Top speed so far per slot, m/s. */
   topSpeed: Float32Array[];
   /** High-speed runs: start frame per slot. */
@@ -333,6 +343,7 @@ export function analyse(replay: Replay, heatCell = 3.5): Analytics {
   const distance = Array.from({ length: slots }, () => new Float32Array(n));
   const topSpeed = Array.from({ length: slots }, () => new Float32Array(n));
   const runStarts: number[][] = Array.from({ length: slots }, () => []);
+  const jumps: number[] = new Array(slots).fill(0);
   const p90 = new Float32Array(n).fill(Number.NaN);
   const deadEvidence = new Float32Array(n).fill(Number.NaN);
   const ballSpeed = new Float32Array(n).fill(Number.NaN);
@@ -363,15 +374,27 @@ export function analyse(replay: Replay, heatCell = 3.5): Analytics {
     for (let s = 0; s < slots; s++) {
       const now = xy(replay, i, s);
       const then = span > 0 ? xy(replay, i - span, s) : null;
-      if (now && then) finite.push(Math.hypot(now[0] - then[0], now[1] - then[1]) * (fps / span));
+      if (now && then) {
+        const v5 = Math.hypot(now[0] - then[0], now[1] - then[1]) * (fps / span);
+        if (v5 <= MAX_PLAYER_SPEED) finite.push(v5);
+      }
       const longThen = i >= longSpan ? xy(replay, i - longSpan, s) : null;
-      if (now && longThen) speed[s]![i] = Math.hypot(now[0] - longThen[0], now[1] - longThen[1]) * (fps / longSpan);
+      if (now && longThen) {
+        const v1 = Math.hypot(now[0] - longThen[0], now[1] - longThen[1]) * (fps / longSpan);
+        if (v1 <= MAX_PLAYER_SPEED) speed[s]![i] = v1;
+      }
+      // A one-frame move faster than any player can run is a tracking jump; count it once.
+      const prev = i > 0 ? xy(replay, i - 1, s) : null;
+      if (now && prev && Math.hypot(now[0] - prev[0], now[1] - prev[1]) * fps > MAX_PLAYER_SPEED * 1.5) jumps[s]!++;
       // Distance and top speed, carried forward.
       const prevDist = i > 0 ? distance[s]![i - 1]! : 0;
       let d = prevDist;
       if (i >= DISTANCE_STEP && i % DISTANCE_STEP === 0) {
         const back = xy(replay, i - DISTANCE_STEP, s);
-        if (now && back) d += Math.hypot(now[0] - back[0], now[1] - back[1]);
+        if (now && back) {
+          const step = Math.hypot(now[0] - back[0], now[1] - back[1]);
+          if ((step * fps) / DISTANCE_STEP <= MAX_PLAYER_SPEED) d += step;
+        }
       }
       distance[s]![i] = d;
       const v = speed[s]![i]!;
@@ -397,7 +420,10 @@ export function analyse(replay: Replay, heatCell = 3.5): Analytics {
     const est = replay.est[i];
     if (est) {
       const back = span > 0 ? replay.est[i - span] : null;
-      if (back) ballSpeed[i] = Math.hypot(est[0] - back[0], est[1] - back[1]) * (fps / span);
+      if (back) {
+        const vb = Math.hypot(est[0] - back[0], est[1] - back[1]) * (fps / span);
+        if (vb <= MAX_BALL_SPEED) ballSpeed[i] = vb;
+      }
       let best = -1;
       let bestD = Infinity;
       for (let s = 0; s < slots; s++) {
@@ -453,7 +479,7 @@ export function analyse(replay: Replay, heatCell = 3.5): Analytics {
   }
   events.sort((a, b) => a.index - b.index);
 
-  return { speed, p90, deadEvidence, ballSpeed, nearest, nearestDistance, distance, topSpeed, runStarts, callCount, hiddenCount, hiddenFor, agree, graded, certainty, heatBin, heatCols, heatRows, camX, camY, events };
+  return { speed, p90, deadEvidence, ballSpeed, nearest, nearestDistance, distance, jumps, topSpeed, runStarts, callCount, hiddenCount, hiddenFor, agree, graded, certainty, heatBin, heatCols, heatRows, camX, camY, events };
 }
 
 interface TeamTotals {
@@ -848,6 +874,8 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
   const [speed, setSpeed] = useState<Speed>(1);
   const [camera, setCamera] = useState<CameraMode>("follow");
   const [picked, setPicked] = useState<number | null>(null);
+  const changes = useMemo(() => changesOf(replay.label), [replay]);
+  const [pinnedChange, setPinnedChange] = useState<number | null>(null);
   const last = replay.length - 1;
   const view = frameAt(replay, index);
   const i = view.index;
@@ -875,6 +903,25 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
   const jump = (to: number) => {
     setPlaying(false);
     seek(to);
+  };
+  // The inspector follows playback (the latest change at or before the playhead) until a change
+  // is picked, from its own buttons or from the events list.
+  let followChange = 0;
+  for (let k = 0; k < changes.length && changes[k]!.at <= Math.floor(index); k++) followChange = k;
+  const currentChange = pinnedChange ?? followChange;
+  const selectChange = (k: number) => {
+    const next = Math.max(0, Math.min(changes.length - 1, k));
+    setPinnedChange(next);
+    if (changes[next]) jump(changes[next]!.at);
+  };
+  const watchChange = (frame: number) => {
+    seek(frame - Math.round(2 * replay.fps));
+    setPlaying(true);
+  };
+  const seekEvent = (to: number) => {
+    jump(to);
+    const k = changes.findIndex((ch) => ch.at === to);
+    if (k >= 0) setPinnedChange(k);
   };
   const toggle = () => {
     if (!playing && index >= last) setIndex(0);
@@ -922,8 +969,9 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
           </h1>
           {synthetic ? (
             <p>
-              A simulated match played through our live possession estimator: where it thinks the ball is, how sure it is, and who it calls in possession, frame by frame.
-              The simulator knows the true answer, so you can see when the estimator is wrong.
+              A simulated match played through our possession estimator: where it thinks the ball is, how sure it is, and who it calls in possession, frame by frame.
+              This page shows it in fixed-lag mode, answering one second after each frame the way a live system with a short delay would. The submission works
+              offline, with a whole half of hindsight. The simulator knows the true answer, so you can see when the estimator is wrong.
             </p>
           ) : (
             <p>
@@ -984,7 +1032,7 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
             <div className={s.stage}>
               <BroadcastPitch replay={replay} analytics={analytics} view={view} mode={camera} selected={selected} onSelect={(slot) => setPicked((p) => (p === slot ? null : slot))} />
               <span className={`${s.overlay} ${s.overlayTL}`}>
-                <i className={s.onDot} /> Estimator on · {(replay.lag / replay.fps).toFixed(1)} s hindsight
+                <i className={s.onDot} /> Fixed-lag estimate · answers {(replay.lag / replay.fps).toFixed(1)} s late
               </span>
               <span className={`${s.overlay} ${s.overlayBL}`}>
                 Pitch {replay.pitch[0].toFixed(1)} × {replay.pitch[1].toFixed(1)} m
@@ -1059,8 +1107,30 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
             <p className="stat-note">Share of live-ball time so far, from the estimator's calls.</p>
           </section>
           <TeamPanel totals={totals} />
-          <EventsPanel replay={replay} events={analytics.events} index={i} onSeek={jump} />
+          <EventsPanel replay={replay} events={analytics.events} index={i} onSeek={seekEvent} />
         </div>
+      </section>
+
+      <section className={s.section} aria-labelledby="mc-inspector">
+        <div className="section-header">
+          <p className="kicker">Transitions</p>
+          <h2 id="mc-inspector">Transition inspector</h2>
+          <p className={s.sectionLede}>
+            Finding the moment possession really changes is the hard part of this challenge, so here is every change the estimate made, one at a time. It follows playback;
+            step through with the buttons, or pick a possession event above.
+          </p>
+        </div>
+        <TransitionInspector
+          replay={replay}
+          a={analytics}
+          changes={changes}
+          current={currentChange}
+          pinned={pinnedChange !== null}
+          index={i}
+          onSelect={selectChange}
+          onFollow={() => setPinnedChange(null)}
+          onWatch={watchChange}
+        />
       </section>
 
       <section className={s.section} aria-labelledby="mc-layers">
@@ -1106,7 +1176,12 @@ function Console({ replay, extra }: { replay: Replay; extra?: ReactNode }) {
               <li>Tracking has positions only. There are no pose, shot or xG numbers here, and the figures on the pitch are drawn, not captured.</li>
               <li>Tracking slots are tracklets, so the numbers on players are slot numbers, not shirt numbers.</li>
               <li>The stoppage detector uses 0.2 s speeds, like the estimator. Speeds shown for players are over 1 s, which hides tracking jitter.</li>
-              <li>Answers come {(replay.lag / replay.fps).toFixed(1)} s after the frame: that hindsight is what steadies the call.</li>
+              <li>
+                The same model can answer in three ways. <b>Offline</b>, with the whole half of hindsight, is the submission: spellF1 0.46 on two open Metrica
+                matches and 0.71 on simulated ones. <b>Fixed lag</b>, {(replay.lag / replay.fps).toFixed(1)} s late, is this page: 0.25 and 0.59, because a second of
+                hindsight still lets a short burst of evidence flip the call. <b>Zero latency</b>, with no hindsight, scores 0.30 and 0.39. Our validation report has
+                the details.
+              </li>
             </ul>
           </div>
           {extra}
@@ -1271,6 +1346,7 @@ function PlayerLayer({ replay, a, slot, index, pinned, onClear }: { replay: Repl
           ["Distance so far", `${Math.round(a.distance[slot]![index]!)} m`],
           [`Runs ≥ ${kmh(HIGH_SPEED).toFixed(1)} km/h`, runsSoFar],
           ["Distance to ball", Number.isFinite(a.nearestDistance[index]!) && a.nearest[index] === slot ? `${a.nearestDistance[index]!.toFixed(1)} m` : "—"],
+          ...(a.jumps[slot]! > 0 ? ([["Tracking jumps ignored", a.jumps[slot]!]] as [string, ReactNode][]) : []),
         ]}
       />
       <Spark
@@ -1472,7 +1548,7 @@ function ConfidencePanel({ replay, a, view }: { replay: Replay; a: Analytics; vi
       </ul>
       <div className="mini-stats">
         <div>
-          <p className={s.miniLabel}>Mean certainty</p>
+          <p className={s.miniLabel}>Mean model confidence</p>
           <p className={s.miniValue}>{mean.toFixed(0)}%</p>
         </div>
         {agreement !== null && (
@@ -1483,12 +1559,16 @@ function ConfidencePanel({ replay, a, view }: { replay: Replay; a: Analytics; vi
         )}
       </div>
       <div className="prediction-confidence">
-        <span>{agreement !== null ? "Agreement" : "Certainty"}</span>
+        <span>{agreement !== null ? "Agreement" : "Confidence"}</span>
         <i>
           <b style={{ width: `${agreement !== null ? agreement * 100 : mean}%` }} />
         </i>
         <strong>{Math.round(agreement !== null ? agreement * 100 : mean)}%</strong>
       </div>
+      <p className={s.note}>
+        Confidence is the model's own posterior, not a calibrated probability. In this fixed-lag mode, calls made at 99% or more were right 85% of the time on Metrica's
+        matches and 96% on simulated ones.
+      </p>
       {replay.truth && <p className={s.note}>Truth is the simulator's record of an invented match. It checks the design, not the leaderboard.</p>}
     </Card>
   );
@@ -1675,6 +1755,394 @@ function TeamPanel({ totals }: { totals: ReturnType<typeof teamTotals> }) {
   );
 }
 
+/* ---- transition inspector ---- */
+
+interface Change {
+  /** First frame of the new label. */
+  at: number;
+  from: ReplayLabel;
+  to: ReplayLabel;
+}
+
+/** Every change of the estimate's call between H, A and D (changes into or out of X are not calls). */
+export function changesOf(labels: string): Change[] {
+  const out: Change[] = [];
+  const pieces = runs(labels);
+  for (let k = 1; k < pieces.length; k++) {
+    const prev = pieces[k - 1]!;
+    const cur = pieces[k]!;
+    if (prev.label === "X" || cur.label === "X") continue;
+    out.push({ at: cur.start, from: prev.label as ReplayLabel, to: cur.label as ReplayLabel });
+  }
+  return out;
+}
+
+const TEAM_OF: Partial<Record<ReplayLabel, 0 | 1>> = { H: 0, A: 1 };
+const LABEL_NAME: Record<ReplayLabel, string> = { H: "Home", A: "Away", D: "Dead ball" };
+
+interface Inspection {
+  kind: "Turnover" | "Into dead ball" | "Restart";
+  cause: string;
+  causeNote: string;
+  before: number | null;
+  after: number | null;
+  ballBefore: [number, number] | null;
+  ballAt: [number, number] | null;
+  ballAfter: [number, number] | null;
+  ballSpeed: number;
+  ballSeen: boolean;
+  nearest: { slot: number; team: 0 | 1; distance: number; speed: number }[];
+  truth: { at: number; offset: number } | null;
+  window: [number, number];
+}
+
+/** Who had the ball for `team` over [lo, hi): the slot most often nearest to it, within reach. */
+function possessor(a: Analytics, replay: Replay, team: 0 | 1, lo: number, hi: number): number | null {
+  const counts = new Map<number, number>();
+  for (let k = Math.max(0, lo); k < Math.min(replay.length, hi); k++) {
+    const s = a.nearest[k]!;
+    if (s < 0 || replay.teams[s] !== team || !(a.nearestDistance[k]! < CONTROL_RADIUS * 1.5)) continue;
+    counts.set(s, (counts.get(s) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  let most = 0;
+  counts.forEach((n, s) => {
+    if (n > most) {
+      most = n;
+      best = s;
+    }
+  });
+  return best;
+}
+
+const estAt = (replay: Replay, k: number): [number, number] | null => {
+  const e = replay.est[Math.max(0, Math.min(replay.length - 1, k))];
+  return e ? [e[0], e[1]] : null;
+};
+
+export function inspect(replay: Replay, a: Analytics, c: Change): Inspection {
+  const fps = replay.fps;
+  const w1 = Math.round(fps);
+  const w2 = Math.round(2 * fps);
+  const k = c.at;
+  const kind = c.to === "D" ? "Into dead ball" : c.from === "D" ? "Restart" : "Turnover";
+  const fromTeam = TEAM_OF[c.from];
+  const toTeam = TEAM_OF[c.to];
+  const before = fromTeam !== undefined ? possessor(a, replay, fromTeam, k - w2, k) : null;
+  const after = toTeam !== undefined ? possessor(a, replay, toTeam, k, k + w2) : null;
+  const ballBefore = estAt(replay, k - w1);
+  const ballAt = estAt(replay, k);
+  const ballAfter = estAt(replay, k + w1);
+  const ballSeen = replay.ball[k] !== null;
+
+  const nearest: Inspection["nearest"] = [];
+  if (ballAt) {
+    const row = replay.players[k]!;
+    for (let s = 0; s < replay.teams.length; s++) {
+      const x = row[s * 2];
+      const y = row[s * 2 + 1];
+      if (x == null || y == null) continue;
+      nearest.push({ slot: s, team: replay.teams[s]!, distance: Math.hypot(x - ballAt[0], y - ballAt[1]), speed: a.speed[s]![k]! });
+    }
+    nearest.sort((p, q) => p.distance - q.distance);
+    nearest.splice(3);
+  }
+
+  // Cause, inferred from positions only.
+  let cause = "Loose ball";
+  let causeNote = "No clear pass or duel: the ball changed hands while nobody had it under control.";
+  const [L, W] = replay.pitch;
+  const outside = (p: [number, number] | null) => !!p && (p[0] < -0.5 || p[0] > L + 0.5 || p[1] < -0.5 || p[1] > W + 0.5);
+  if (kind === "Into dead ball") {
+    if (outside(ballAt) || outside(ballAfter)) {
+      cause = "Ball out of play";
+      causeNote = "The estimated ball left the pitch.";
+    } else {
+      cause = "Play stopped";
+      const p90 = a.p90[Math.min(replay.length - 1, k + w1)]!;
+      causeNote = Number.isFinite(p90)
+        ? `The ball stayed on the pitch but the fastest players slowed to ${kmh(p90).toFixed(0)} km/h, the look of a foul or an injury stoppage.`
+        : "The ball stayed on the pitch but play slowed down.";
+    }
+  } else if (kind === "Restart") {
+    cause = "Restart";
+    causeNote = after !== null ? `${slotName(replay, after)} took it.` : "Play resumed.";
+  } else if (!ballSeen && a.hiddenFor[k]! > fps) {
+    cause = "Uncertain";
+    causeNote = `The tracking had not seen the ball for ${(a.hiddenFor[k]! / fps).toFixed(1)} s, so the change rests on the filter's guess.`;
+  } else {
+    let flight = 0;
+    for (let j = Math.max(0, k - w2); j <= k; j++) if (Number.isFinite(a.ballSpeed[j]!)) flight = Math.max(flight, a.ballSpeed[j]!);
+    const start = estAt(replay, k - w2);
+    const travelled = start && ballAt ? Math.hypot(ballAt[0] - start[0], ballAt[1] - start[1]) : 0;
+    const row = replay.players[k]!;
+    const gap =
+      before !== null && after !== null && row[before * 2] != null && row[after * 2] != null
+        ? Math.hypot(row[before * 2]! - row[after * 2]!, row[before * 2 + 1]! - row[after * 2 + 1]!)
+        : Infinity;
+    if (flight > 8 && travelled > 8) {
+      cause = "Interception";
+      causeNote = `The ball travelled ${travelled.toFixed(0)} m at up to ${kmh(flight).toFixed(0)} km/h and was taken by the other team.`;
+    } else if (gap < 2.5) {
+      cause = "Tackle or duel";
+      causeNote = `The two players were ${gap.toFixed(1)} m apart when the ball changed hands.`;
+    }
+  }
+
+  let truth: Inspection["truth"] = null;
+  if (replay.truth) {
+    let best: number | null = null;
+    for (const t of changesOf(replay.truth)) {
+      if (t.to !== c.to || Math.abs(t.at - k) > w2) continue;
+      if (best === null || Math.abs(t.at - k) < Math.abs(best - k)) best = t.at;
+    }
+    if (best !== null) truth = { at: best, offset: (k - best) / fps };
+  }
+
+  return {
+    kind,
+    cause,
+    causeNote,
+    before,
+    after,
+    ballBefore,
+    ballAt,
+    ballAfter,
+    ballSpeed: a.ballSpeed[k]!,
+    ballSeen,
+    nearest,
+    truth,
+    window: [Math.max(0, k - Math.round(5 * fps)), Math.min(replay.length - 1, k + Math.round(5 * fps))],
+  };
+}
+
+function TransitionInspector({
+  replay,
+  a,
+  changes,
+  current,
+  pinned,
+  index,
+  onSelect,
+  onFollow,
+  onWatch,
+}: {
+  replay: Replay;
+  a: Analytics;
+  changes: Change[];
+  current: number;
+  pinned: boolean;
+  index: number;
+  onSelect: (k: number) => void;
+  onFollow: () => void;
+  onWatch: (frame: number) => void;
+}) {
+  const c = changes[current];
+  const info = useMemo(() => (c ? inspect(replay, a, c) : null), [replay, a, c]);
+  if (!c || !info) {
+    return <p className="stat-note">The estimate never changes its call in this replay.</p>;
+  }
+  const fps = replay.fps;
+  const clock = (k: number) => formatClock((replay.firstFrame + k) / fps);
+  const who = (slot: number | null) => (slot === null ? "—" : slotName(replay, slot));
+  const pt = (p: [number, number] | null) => (p ? `${p[0].toFixed(1)}, ${p[1].toFixed(1)} m` : "—");
+  const truthLine = !replay.truth
+    ? null
+    : info.truth
+      ? Math.abs(info.truth.offset) < 0.1
+        ? { ok: true, text: "Matches the simulator's truth to within 0.1 s." }
+        : { ok: true, text: `Matches the simulator's truth, ${Math.abs(info.truth.offset).toFixed(1)} s ${info.truth.offset > 0 ? "late" : "early"}.` }
+      : { ok: false, text: "No change like this in the simulator's truth within 2 s: the estimate invented it." };
+
+  return (
+    <div className={`card ${s.inspector}`}>
+      <div className={s.inspHead}>
+        <div>
+          <p className={s.inspCount}>
+            Change {current + 1} of {changes.length} · {clock(c.at)}
+          </p>
+          <h3 className={s.inspTitle}>
+            <span className={`state-chip state-${c.from} no-hatch`} />
+            {LABEL_NAME[c.from]} <span className="muted">→</span> <span className={`state-chip state-${c.to} no-hatch`} />
+            {LABEL_NAME[c.to]}
+          </h3>
+        </div>
+        <div className={s.inspNav}>
+          <button type="button" className="button button-secondary" onClick={() => onSelect(current - 1)} disabled={current === 0}>
+            ← Previous
+          </button>
+          <button type="button" className="button button-secondary" onClick={() => onSelect(current + 1)} disabled={current === changes.length - 1}>
+            Next →
+          </button>
+          <button type="button" className="button button-primary" onClick={() => onWatch(c.at)}>
+            <Glyph name="Play" size={14} /> Watch it
+          </button>
+        </div>
+      </div>
+      {pinned && (
+        <button type="button" className={`text-link ${s.follow}`} onClick={onFollow}>
+          Follow playback again
+        </button>
+      )}
+
+      <div className={s.inspGrid}>
+        <InspectorPitch replay={replay} c={c} info={info} />
+        <div className={s.inspFacts}>
+          <div className={s.cause}>
+            <p className="kicker">
+              {info.kind === info.cause ? info.kind : `${info.kind} · ${info.cause}`}
+            </p>
+            <p>{info.causeNote}</p>
+            <p className={s.inferred}>Inferred from positions only: the tracking carries no event data.</p>
+          </div>
+          {truthLine && (
+            <p className={s.verdict} data-ok={truthLine.ok}>
+              {truthLine.ok ? "✓" : "✗"} {truthLine.text}
+            </p>
+          )}
+          <Rows
+            rows={[
+              ["Previous possessor", who(info.before)],
+              ["New possessor", who(info.after)],
+              ["Ball 1 s before", pt(info.ballBefore)],
+              ["Ball at the change", `${pt(info.ballAt)}${info.ballSeen ? "" : " (hidden)"}`],
+              ["Ball 1 s after", pt(info.ballAfter)],
+              ["Ball speed", Number.isFinite(info.ballSpeed) ? `${kmh(info.ballSpeed).toFixed(0)} km/h` : "—"],
+            ]}
+          />
+          <p className={s.miniLabel}>Nearest players at the change</p>
+          <ul className={s.nearList}>
+            {info.nearest.map((p) => (
+              <li key={p.slot}>
+                <i className={p.team === 0 ? "home-bg" : "away-bg"} />
+                <span>{slotName(replay, p.slot)}</span>
+                <b>{p.distance.toFixed(1)} m</b>
+                <b>{Number.isFinite(p.speed) ? `${kmh(p.speed).toFixed(0)} km/h` : "—"}</b>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <ProbabilityWindow replay={replay} c={c} info={info} index={index} />
+    </div>
+  );
+}
+
+function InspectorPitch({ replay, c, info }: { replay: Replay; c: Change; info: Inspection }) {
+  const [L, W] = replay.pitch;
+  const fps = replay.fps;
+  const k = c.at;
+  const path = (lo: number, hi: number) => {
+    const pts: string[] = [];
+    for (let j = Math.max(0, lo); j <= Math.min(replay.length - 1, hi); j++) {
+      const e = replay.est[j];
+      if (e) pts.push(`${e[0].toFixed(2)},${e[1].toFixed(2)}`);
+    }
+    return pts.join(" ");
+  };
+  const row = replay.players[k]!;
+  const near = new Set(info.nearest.map((p) => p.slot));
+  const focus = [info.before, info.after].filter((v): v is number => v !== null);
+  return (
+    <figure className={s.inspPitch}>
+      <svg viewBox={`-3 -3 ${L + 6} ${W + 6}`} aria-label={`Pitch at the change: ball path from 2 s before to 2 s after`} role="img">
+        <rect x={0} y={0} width={L} height={W} className="pitch-field" />
+        <g className={s.miniLines}>
+          <rect x={0} y={0} width={L} height={W} />
+          <line x1={L / 2} y1={0} x2={L / 2} y2={W} />
+          <circle cx={L / 2} cy={W / 2} r={9.15} />
+          <rect x={0} y={(W - 40.3) / 2} width={16.5} height={40.3} />
+          <rect x={L - 16.5} y={(W - 40.3) / 2} width={16.5} height={40.3} />
+        </g>
+        {replay.teams.map((team, slot) => {
+          const x = row[slot * 2];
+          const y = row[slot * 2 + 1];
+          if (x == null || y == null) return null;
+          const key = near.has(slot) || focus.includes(slot);
+          return (
+            <g key={slot} opacity={key ? 1 : 0.35}>
+              <circle cx={x} cy={y} r={key ? 1.6 : 1.1} className={team === 0 ? s.miniHome : s.miniAway} />
+              {focus.includes(slot) && <circle cx={x} cy={y} r={2.8} className={s.miniFocus} />}
+              {key && (
+                <text x={x} y={y + 0.65} textAnchor="middle" className={s.miniNum}>
+                  {slotNumber(replay, slot)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        <polyline points={path(k - Math.round(2 * fps), k)} className={s.pathBefore} />
+        <polyline points={path(k, k + Math.round(2 * fps))} className={s.pathAfter} />
+        {info.ballAt && <circle cx={info.ballAt[0]} cy={info.ballAt[1]} r={1} className={s.miniBall} />}
+      </svg>
+      <figcaption className="chart-legend">
+        <span><i className={s.kBefore} />Ball, 2 s before</span>
+        <span><i className={s.kAfter} />Ball, 2 s after</span>
+        <span><i className={s.kRing} />Previous and new possessor</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+function ProbabilityWindow({ replay, c, info, index }: { replay: Replay; c: Change; info: Inspection; index: number }) {
+  const w = 720;
+  const h = 150;
+  const [lo, hi] = info.window;
+  const x = (k: number) => 30 + ((k - lo) / Math.max(1, hi - lo)) * (w - 40);
+  const y = (p: number) => h - 22 - (p / 100) * (h - 34);
+  const series: { key: string; label: string; values: number[]; color: string }[] = [
+    { key: "H", label: "p(home)", values: replay.pHome, color: "var(--home)" },
+    { key: "A", label: "p(away)", values: replay.pAway, color: "var(--away)" },
+    { key: "D", label: "p(dead)", values: replay.pHome.map((v, j) => Math.max(0, 100 - v - replay.pAway[j]!)), color: "var(--dead)" },
+  ];
+  const fps = replay.fps;
+  return (
+    <div className={`chart-card ${s.probWrap}`}>
+      <p className={s.miniLabel}>The model's probabilities, 5 s either side</p>
+      <svg viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+        {[0, 50, 100].map((p) => (
+          <g key={p}>
+            <line x1={30} x2={w - 10} y1={y(p)} y2={y(p)} />
+            <text x={24} y={y(p) + 4} textAnchor="end">{p}</text>
+          </g>
+        ))}
+        {series.map((se) => {
+          const pts: string[] = [];
+          for (let k = lo; k <= hi; k++) {
+            if (replay.label[k] === "X") continue;
+            pts.push(`${x(k).toFixed(1)},${y(se.values[k]!).toFixed(1)}`);
+          }
+          return <polyline key={se.key} points={pts.join(" ")} className={s.series} style={{ stroke: se.color }} />;
+        })}
+        <line x1={x(c.at)} x2={x(c.at)} y1={6} y2={h - 22} className={s.changeLine} />
+        {info.truth && <line x1={x(info.truth.at)} x2={x(info.truth.at)} y1={6} y2={h - 22} className={s.truthLine} />}
+        {index >= lo && index <= hi && <line x1={x(index)} x2={x(index)} y1={6} y2={h - 22} className={s.probHead} />}
+        {[-5, -2.5, 0, 2.5, 5].map((t) => {
+          const k = c.at + t * fps;
+          if (k < lo || k > hi) return null;
+          return (
+            <text key={t} x={x(k)} y={h - 6} textAnchor="middle">
+              {t === 0 ? "change" : `${t > 0 ? "+" : ""}${t} s`}
+            </text>
+          );
+        })}
+      </svg>
+      <div className="chart-legend">
+        {series.map((se) => (
+          <span key={se.key}>
+            <i style={{ background: se.color }} />
+            {se.label}
+          </span>
+        ))}
+        <span><i className={s.kChange} />the estimate's change</span>
+        {info.truth && <span><i className={s.kTruth} />the truth's change</span>}
+        <span><i className={s.kHead} />playhead</span>
+      </div>
+      <p className={s.note}>The estimate answers {(replay.lag / fps).toFixed(1)} s after each frame, so these are its fixed-lag probabilities, not the whole-half ones the submission uses.</p>
+    </div>
+  );
+}
+
 const CONSOLE_CSS = `/* Match console. Built on the site's own classes and tokens (index.css), so it follows the
    light and dark themes; everything here is scoped with the mc- prefix. */
 .mc-root { outline: none; }
@@ -1816,6 +2284,52 @@ const CONSOLE_CSS = `/* Match console. Built on the site's own classes and token
 .mc-eventTime, .mc-eventWho { color: var(--muted); font: 12px/16px "JetBrains Mono", "JetBrains Mono Variable", monospace; }
 .mc-eventText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* transition inspector */
+.mc-sectionLede { margin-top: 12px; max-width: 70ch; color: var(--muted); }
+.mc-inspector { padding: 24px; display: grid; gap: 20px; }
+.mc-inspHead { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.mc-inspCount { color: var(--muted); font: 12px/16px "JetBrains Mono", "JetBrains Mono Variable", monospace; }
+.mc-root .mc-inspTitle { margin-top: 6px; font-size: 22px; line-height: 30px; letter-spacing: -0.02em; }
+.mc-inspTitle .state-chip { margin-right: 8px; }
+.mc-inspNav { display: flex; gap: 8px; flex-wrap: wrap; }
+.mc-inspNav .button { min-height: 40px; padding: 8px 14px; gap: 8px; cursor: pointer; }
+.mc-inspNav .button:disabled { opacity: 0.4; cursor: default; }
+.mc-follow { justify-self: start; background: none; border: 0; padding: 0; cursor: pointer; margin-top: -8px; }
+.mc-inspGrid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 24px; align-items: start; }
+.mc-inspPitch { margin: 0; }
+.mc-inspPitch svg { width: 100%; height: auto; display: block; border-radius: 4px; }
+.mc-inspPitch figcaption { margin-top: 10px; }
+.mc-miniLines rect, .mc-miniLines line, .mc-miniLines circle { fill: none; stroke: var(--green); stroke-width: 0.35; opacity: 0.7; }
+.mc-miniHome { fill: var(--home); stroke: var(--surface); stroke-width: 0.3; }
+.mc-miniAway { fill: var(--away); stroke: var(--surface); stroke-width: 0.3; }
+.mc-miniFocus { fill: none; stroke: var(--text); stroke-width: 0.45; }
+.mc-miniNum { font: 600 1.7px "JetBrains Mono", "JetBrains Mono Variable", monospace; fill: white; pointer-events: none; }
+.mc-pathBefore { fill: none; stroke: var(--amber); stroke-width: 0.5; stroke-dasharray: 1.2 0.9; stroke-linecap: round; }
+.mc-pathAfter { fill: none; stroke: var(--amber); stroke-width: 0.6; stroke-linecap: round; }
+.mc-miniBall { fill: white; stroke: #16181d; stroke-width: 0.3; }
+.mc-kBefore { height: 0 !important; width: 16px !important; border-top: 2px dashed var(--amber); vertical-align: 3px !important; }
+.mc-kAfter { height: 2px !important; width: 16px !important; background: var(--amber); vertical-align: 3px !important; }
+.mc-kRing { border: 2px solid var(--text); border-radius: 50% !important; }
+.mc-inspFacts { display: grid; gap: 14px; min-width: 0; }
+.mc-cause { padding: 14px 16px; border-radius: 4px; background: var(--surface-2); }
+.mc-cause p:not(.kicker) { margin-top: 6px; font-size: 14px; line-height: 22px; }
+.mc-cause .mc-inferred { color: var(--muted); font-size: 12px; line-height: 18px; }
+.mc-verdict { font-size: 14px; font-weight: 600; }
+.mc-verdict[data-ok="true"] { color: var(--green); }
+.mc-verdict[data-ok="false"] { color: var(--amber); }
+.mc-nearList { list-style: none; margin: 0; padding: 0; display: grid; }
+.mc-nearList li { display: grid; grid-template-columns: 10px 1fr auto 72px; gap: 10px; align-items: center; padding: 7px 0; font-size: 13px; }
+.mc-nearList li + li { border-top: 1px solid var(--border); }
+.mc-nearList i { width: 10px; height: 10px; border-radius: 2px; }
+.mc-nearList b { font: 500 12px "JetBrains Mono", "JetBrains Mono Variable", monospace; text-align: right; }
+.mc-probWrap svg { width: 100%; height: auto; display: block; margin-top: 6px; }
+.mc-root .mc-changeLine { stroke: var(--text); stroke-width: 1.5; }
+.mc-root .mc-truthLine { stroke: var(--green); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.mc-kChange { height: 10px !important; width: 2px !important; background: var(--text); }
+.mc-kTruth { height: 10px !important; width: 0 !important; border-left: 2px dashed var(--green); }
+.mc-kHead { height: 10px !important; width: 2px !important; background: var(--muted); }
+.mc-root .mc-probHead { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 2; }
+
 /* sections */
 .mc-section { margin-top: 96px; }
 .mc-layers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
@@ -1920,6 +2434,7 @@ const CONSOLE_CSS = `/* Match console. Built on the site's own classes and token
 }
 @media (max-width: 900px) {
   .mc-charts, .mc-dataGrid { grid-template-columns: 1fr; }
+  .mc-inspGrid { grid-template-columns: 1fr; }
   .mc-sideLayers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mc-section { margin-top: 64px; }
 }
