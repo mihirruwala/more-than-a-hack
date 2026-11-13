@@ -66,6 +66,57 @@ class BallFilterTests(unittest.TestCase):
         self.assertTrue(f.step((80.0, 10.0)))  # third in a row: the ball really is there
         self.assertLess(np.linalg.norm(f.position - (80.0, 10.0)), 1.0)
 
+    def test_reacquires_after_long_gap_far_away(self):
+        # Ten seconds unseen with nobody to follow: the uncertainty has grown so much that the
+        # first sighting, 40 m away, is accepted at once and the estimate snaps to it.
+        f = BallFilter()
+        for _ in range(25):
+            f.step((30.0, 30.0))
+        for _ in range(250):
+            f.step(None)
+        self.assertGreater(f.sigma, 20.0)
+        self.assertTrue(f.step((70.0, 50.0)))
+        self.assertLess(np.linalg.norm(f.position - (70.0, 50.0)), 0.5)
+        self.assertLess(f.sigma, 1.0)
+
+    def test_reacquires_after_long_gap_pinned_to_wrong_carrier(self):
+        # Eight seconds attached to a carrier who no longer has it. The carrier updates keep the
+        # uncertainty small, so the real sighting 30 m away is gated out twice, then believed on
+        # the third consecutive frame.
+        f = BallFilter()
+        for _ in range(25):
+            f.step((40.0, 30.0))
+        for _ in range(200):
+            f.step(None, carrier=(40.0, 30.0))
+        self.assertLess(f.sigma, 2.0)
+        accepted = [f.step((70.0, 30.0)) for _ in range(3)]
+        self.assertEqual(accepted, [False, False, True])
+        self.assertLess(np.linalg.norm(f.position - (70.0, 30.0)), 0.5)
+
+    def test_velocity_recovers_after_reacquisition(self):
+        # The ball comes back moving at 15 m/s: within half a second the filter has its speed.
+        f = BallFilter()
+        for _ in range(25):
+            f.step((20.0, 34.0))
+        for _ in range(150):
+            f.step(None)
+        path = straight_line(40, start=(30.0, 34.0), velocity=(15.0, 0.0))
+        for t in range(13):
+            f.step(path[t])
+        self.assertLess(np.linalg.norm(f.velocity - (15.0, 0.0)), 2.0)
+        self.assertLess(np.linalg.norm(f.position - path[12]), 0.5)
+
+    def test_long_gap_stays_finite_and_bounded(self):
+        # A whole minute unseen must not overflow or send the estimate off to infinity.
+        f = BallFilter()
+        for t in range(25):
+            f.step((50.0 + 0.4 * t, 30.0))
+        for _ in range(1500):
+            f.step(None)
+        self.assertTrue(np.isfinite(f.position).all())
+        self.assertTrue(np.isfinite(f.sigma))
+        self.assertLess(np.linalg.norm(f.velocity), 1.0)  # coasting damps a stale velocity away
+
     def test_covariance_stays_valid(self):
         rng = np.random.RandomState(0)
         f = BallFilter()
